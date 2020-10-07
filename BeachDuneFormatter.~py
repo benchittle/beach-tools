@@ -1,0 +1,82 @@
+import keyboard as kb
+import time
+from pynput.mouse import Button
+from pynput.mouse import Controller as MouseController
+from pynput.keyboard import Key
+from pynput.keyboard import Controller as KeyboardController
+from PIL import Image, ImageGrab
+# WINDOWSPY
+################################ CONFIG ################################
+# loop speed (in seconds)
+delay = 0.05
+
+# the color of "white"
+white = (255, 255, 255)
+# the difference threshold
+whiteThresh = 5
+
+# the number of pixels between each sample point
+sampleInterval = 7
+
+# the horizontal pixel
+startX = 275
+# the ending horizontal pixel
+endX = 1500
+# the starting vertical pixel
+startY = 170
+# the ending vertical pixel
+endY = 945
+################################ CONFIG ################################
+
+# used for mouse and keyboard control
+mouse = MouseController()
+keyboard = KeyboardController()
+# converts the pixel values given above into a box for ImageGrab.grab()
+box = (startX, startY, endX, endY)
+
+def deleteShape():
+	# grab the screen
+	screen = ImageGrab.grab(bbox=box)
+	pixels = screen.load()
+
+	width, height = screen.size
+	r, g, b = white
+
+	# sample every <sampleInterval> along x and y
+	for y in range (0, height, sampleInterval):
+		for x in range(0, width, sampleInterval):
+			# sample the pixel's color
+			srcR, srcG, srcB = pixels[x, y]
+
+			# calculate the per-channel difference from accepted "white"
+			rDif = abs(r - srcR)
+			gDif = abs(g - srcG)
+			bDif = abs(b - srcB)
+
+			totDif = rDif + gDif + bDif
+
+			# check if the absolute deviance of the pixel's color
+			# relative to the accepted white is over the threshold
+			if totDif >= whiteThresh:
+				# pretty formatting line break
+				print ("#############################################################")
+
+				# output some information to the console
+				print ("Detected deviant pixel: " + str(x + startX) + ", " + str(y + startY))
+				print ("Detected deviant pixel (relative): " + str(x) + ", " + str(y))
+				print ("Deviant pixel color: " + str(pixels[x, y]))
+
+				# move mouse to detected pixel then click
+				mouse.position = (x + startX, y + startY)
+				mouse.press(Button.left)
+				mouse.release(Button.left)
+
+				# send delete keyboard event
+				keyboard.press(Key.delete)
+				keyboard.release(Key.delete)
+				return
+
+while not kb.is_pressed('escape'):
+	if (kb.is_pressed('q')):
+		deleteShape()
+	time.sleep(delay)
