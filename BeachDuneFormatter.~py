@@ -32,8 +32,10 @@ C)
 
 
 """
-import os, re
+import os, re, time
 import pandas as pd
+import numpy as np
+
 
 
 
@@ -62,7 +64,7 @@ def read_mask_csvs(path_to_dir):
 
             # If a number was found, read the file and append it to the list.
             if segment is not None:
-                segment = segment.group()
+                segment = int(segment.group())
 
                 # Read only the specified columns and reorder them in the
                 # DataFrame.
@@ -84,15 +86,84 @@ def read_mask_csvs(path_to_dir):
     return pd.concat(csvs)
 
 
+def shore_filter(profile_xy, feature_coords):
+    """Returns a filter to identify the shoreline."""
+    x = profile_xy["x"]
+    y = profile_xy["y"]
+    slope = (y - y.shift(1)) / (x - x.shift(1))
+
+    return ((y > 0)
+            # Current y value is the largest so far
+            & (y > y.shift(1).expanding(min_periods=1).max())
+            # Current value and next 4 slope values are positive
+            & (slope.rolling(5).min().shift(-4) >= 0))
+
+
+def crest_filter(profile_xy, feature_coords):
+    """Returns a filter to identify the dune crest."""
+    # Slice the data from the shore onwards since the crest must be past the
+    # shore.
+    shore_x = feature_coords["shore_x"]
+    x = profile_xy["x"]
+    y = profile_xy["y"]
+
+    return ((x > shore_x)
+            # Current y value is the largest so far
+            & (y > y.shift(1).expanding(min_periods=1).max())
+            # Difference between current y value and minimum of next 20 > 0.6
+            & (y - y.rolling(20).min().shift(-20) > 0.6)
+            # Current y value > next 20
+            & (y > y.rolling(10).max().shift(-10)))
+
+
+def toe_filter(profile_xy, feature_coords):
+    shore_x = feature_coords["shore_x"]
+    crest_x = feature_coords["crest_x"]
+    x = profile_xy["x"]
+    y = profile_xy["y"]
+    # Polynomial coefficients
+    A, B, C, D = np.polyfit(x=x.loc[shore_x:crest_x], y=y.loc[shore_x:crest_x],
+                            deg=3)
+    differences = y - ((A * x ** 3) + (B * x ** 2) + (C * x) + D)
+    toe_x = differences.loc[shore_x:crest_x].idxmin()
+    return (x == toe_x)
+
+
+def heel_filter(profile_df, feature_coords):
+    crest_x = feature_coords["crest_x"]
+    x = profile_df["x"]
+    y = profile_df["y"]
+
+    return ((x > crest_x)
+                # Difference between current y value and minimum of next 10 > 0.6
+            & ~((y - y.rolling(10).min().shift(-10) > 0.6)
+                # Current y value > max of previous 10 y values
+                & (y > y.rolling(10).max())
+                & (y > y.rolling(20).max().shift(-20))))
+
+
 def identify_features(profile_xy):
     """
     Identifies the coordinates of the shoreline, dune toe, dune crest, and
     dune heel for a given profile.
     """
-    x = profile_xy["x"]
-    y = profile_xy["y"]
-    slope = (y - y.shift(1)) / (x - x.shift(1))
+    state, segment, profile = profile_xy.iloc[0][["state", "segment", "profile"]]
+    profile_xy = profile_xy.set_index("x", drop=False)
+    filter_funcs=[("shore", shore_filter), ("crest", crest_filter),
+                  ("toe", toe_filter), ("heel", heel_filter)]
 
+    feature_coords = {}
+    for feature, filt_func in filter_funcs:
+        filt = filt_func(profile_xy, feature_coords)
+        if any(filt):
+            # The first row to pass the filter is used to identify the feature.
+            coords = tuple(profile_xy[filt].iloc[0][["x", "y"]])
+            feature_coords[feature + "_x"], feature_coords[feature + "_y"] = coords
+        else:
+            print("\tFailed to identify {} for {}".format(feature, (state, segment, profile)))
+            return None
+
+    return feature_coords
 
 
 def test_1():
@@ -108,16 +179,38 @@ def test_1():
 
 def test_2():
     BENPATH = r"C:\Users\BenPc\Documents\GitHub\beach-dune-formatter\data"
+    FEATURE_COLUMNS = ["state", "segment", "profile",  "shore_x",  "shore_y",
+                       "toe_x", "toe_y", "crest_x", "crest_y", "heel_x",
+                       "heel_y"]
     pd.options.display.max_columns = 12
     pd.options.display.width = 120
 
     xy_data = read_mask_csvs(BENPATH)
     print("\nStarting data manipulation")
+    feature_data = {feature:list() for feature in FEATURE_COLUMNS}
     # Iterate over the data grouped first by state, then by segment, then by
     # profile.
+    t1 = 0
     for (state, segment, profile), profile_xy in xy_data.groupby(["state", "segment", "profile"]):
-        identify_features(profile_xy)
-        break
+        if profile == 0:
+            print("\tLast segment took {}".format(time.perf_counter() - t1))
+            print("\tBeginning segment {}".format(segment))
+            t1 = time.perf_counter()
+        feature_data["state"].append(state)
+        feature_data["segment"].append(segment)
+        feature_data["profile"].append(profile)
+
+        features = identify_features(profile_xy)
+        if features is not None:
+            for feature, coord in identify_features(profile_xy).items():
+                feature_data[feature].append(coord)
+        else:
+            for feature in feature_data:
+                if feature not in ["state", "segment", "profile"]:
+                    feature_data[feature].append(None)
+
+    feature_data = pd.DataFrame(feature_data)
+    print(feature_data)
 
 def main():
     test_2()
