@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Name:        BeachDuneFormatter.py
+# Name:        beach-dune-formatter.py
 # Version:     Python 3.7, Pandas 0.24
 #
 # Purpose:     Processing beach profile data.
@@ -41,9 +41,10 @@ def read_mask_csvs(path_to_dir):
     interpreted to contain data for segment 19).
     """
     # Default value since all testing data is from one state.
-    STATE = 29
+    STATE = np.uint8(29)
     INPUT_COLUMNS = ["LINE_ID", "FIRST_DIST", "FIRST_Z"]
     OUTPUT_COLUMNS = ["profile", "x", "y"]
+    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32]))
 
     if not path_to_dir.endswith("\\"):
         path_to_dir += "\\"
@@ -58,17 +59,19 @@ def read_mask_csvs(path_to_dir):
 
             # If a number was found, read the file and append it to the list.
             if segment is not None:
-                segment = int(segment.group())
+                segment = np.int16(segment.group())
 
                 # Read only the necessary columns and reorder them in the
                 # DataFrame.
                 csv_data = pd.read_csv(path_to_dir + file_name,
-                                  usecols=INPUT_COLUMNS)[INPUT_COLUMNS]
+                                       usecols=INPUT_COLUMNS,
+                                       dtype=DTYPES)[INPUT_COLUMNS]
                 csv_data.rename(columns=dict(zip(INPUT_COLUMNS, OUTPUT_COLUMNS)),
                            inplace=True)
                 # Insert a column for the segment and state values.
                 csv_data.insert(loc=0, column="state", value=STATE)
                 csv_data.insert(loc=1, column="segment", value=segment)
+
                 csvs.append(csv_data)
 
                 print("\tRead {} rows of data from file '{}'".format(len(csv_data), file_name))
@@ -77,6 +80,8 @@ def read_mask_csvs(path_to_dir):
         else:
             print("\tSkipping file '{}' (not a .csv)".format(file_name))
 
+    # Combine the .csvs into a single DataFrame and set the index to the x
+    # values column.
     return pd.concat(csvs).set_index("x", drop=False)
 
 
@@ -106,7 +111,7 @@ def identify_crest(profile_xy, shore_x):
     filt = ((y > y.shift(1).expanding(min_periods=1).max())
             # Difference between current y value and minimum of next 20 > 0.6
             & (y - y.rolling(20).min().shift(-20) > 0.6)
-            # Current y value > next 20
+            # Current y value > next 10
             & (y > y.rolling(10).max().shift(-10)))
 
     x_coord = filt.idxmax()
@@ -158,6 +163,11 @@ def identify_heel(profile_df, crest_x):
         return None
     else:
         return x_coord
+
+
+def grouped_mean(profiles, n):
+    """Returns a new DataFrame with the mean of every n rows for each column."""
+    return profiles.groupby(np.arange(len(profiles)) // n).mean()
 
 
 def identify_features(profile_xy):
@@ -222,50 +232,51 @@ def measure_volume(profile_xy, start_x, end_x, profile_spacing, base_elevation=0
 
 
 ### MAKE THIS A HIGHER LEVEL / MULTIPLE PROFILES MODULE FUNCTION AND LEAVE
-### get_volume AS A SINGLE PROFILE FUNCTION
+### measure_volume AS A SINGLE PROFILE FUNCTION
 
-###ASSUMES THAT DATA CAN BE GROUPED BY
-def measure_feature_volumes(xy_data, start_values, end_values, base_elevations,
-                            profile_spacing=None):
+###ASSUMES THAT DATA CAN BE GROUPED BY state, segment, profile.
+###RENAME.
+def measure_feature_volumes(xy_data, start_values, end_values, base_elevations):
     """
-    Returns a list of the volume measured between two points in each profile in
-    the dataset.
+    Returns a list of volumes calculated between the start and end point given
+    for each profile.
 
     ARGUMENTS
     xy_data: DataFrame
       xy data of a collection of profiles.
-    start_values: array like
-      The x value to start measuring volume from for each profile.
-    end_values: array like
-      The x value to stop measuring volume from for each profile.
-    base_elevations: array like
+    start_values: iterable
+      Sequence; the x value to start measuring volume from for each profile.
+    end_values: iterable
+      Sequence; the x value to stop measuring volume from for each profile.
+    base_elevations: iterable
       The base elevation for each profile.
-    profile_spacing: Float
-      The distance between consecutive profiles. If no value is supplied, the
-      distance between the first two consecutive x values will be used (i.e. a
-      square grid is assumed).
     """
-    if profile_spacing is None:
-        profile_spacing = xy_data["x"].iat[1] - xy_data["x"].iat[0]
+    # The distance between consecutive profiles. Uses the distance between the
+    # first two consecutive x values, which assumes the profiles were taken from
+    # a square grid.
+    profile_spacing = xy_data["x"].iat[1] - xy_data["x"].iat[0]
 
     grouped_xy = xy_data.groupby(["state", "segment", "profile"])
     data = []
+    # Measure the volume for each profile between the corresponding start and
+    # end x value in start_values and end_values.
     for (index, profile_xy), start_x, end_x, base_y in zip(grouped_xy, start_values, end_values, base_elevations):
         data.append(measure_volume(profile_xy, start_x, end_x, profile_spacing, base_y))
 
     return data
 
 
-### ONLY EVERY nth VALUE NEEDS TO BE CALCULATED RATHER THAN CALCULATING THE
-### ROLLING MEAN AND THEN TAKING EVERY nth VALUE
-def average_data(beach_data, size):
-    data = []
-    for index, segment_beach_data in beach_data.groupby(["state", "segment"]):
-        data.append(beach_data.rolling(size).mean().shift(1 - size).iloc[::size])
-    return pd.concat(data)
-
-
 def write_data_excel(path_to_file, dataframes, names):
+    """
+    Write data to an Excel file.
+
+    ARGUMENTS
+    path_to_file: string
+    dataframes: iterable
+      Sequence of DataFrames to write. Each element is written on a new sheet.
+    names: iterable
+      The name of each sheet, corresponding to each element in 'dataframes'.
+    """
     with pd.ExcelWriter(path_to_file) as writer:
         for name, data in zip(names, dataframes):
             try:
@@ -273,6 +284,7 @@ def write_data_excel(path_to_file, dataframes, names):
             except IndexError:
                 print("\tFailed to write {} to file (the DataFrame may be"
                       " empty).".format(name))
+
 
 
 ### HAVE THE USER DECLARE HOW THEIR DATA IS CATEGORIZED / ORGANIZED
@@ -368,7 +380,7 @@ def main(input_path, output_path):
     start_time = time.perf_counter()
 
     # Takes the mean of each column for every 10 profiles.
-    averaged_beach_data = average_data(beach_data, size=10)
+    averaged_beach_data = beach_data.groupby(["state", "segment"]).apply(grouped_mean, 10)
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
 
 
@@ -390,10 +402,10 @@ def main(input_path, output_path):
 
     print("\nTotal time: {:.2f} seconds".format(time.perf_counter() - initial_start_time))
 
-    return xy_data, profiles, beach_data, filtered_beach_data, averaged_beach_data
+    #return xy_data, profiles, beach_data, filtered_beach_data, averaged_beach_data
 
 
 if __name__ == "__main__":
-    xy_data, profiles, beach_data, filtered_beach_data, avg = main(current_input, current_output)
-
+    #xy_data, profiles, beach_data, filtered_beach_data, avg = main(current_input, current_output)
+    main(current_input, current_output)
 

@@ -1,5 +1,15 @@
+#-------------------------------------------------------------------------------
+# Name:        profile_plotter.py
+# Version:     Python 3.7, Pandas 0.24
+#
+# Purpose:     Plot profiles xy profile data.
+#
+# Authors:     Ben Chittle, Alex Smith
+#-------------------------------------------------------------------------------
+
 import os, re
 import pandas as pd
+import numpy as np
 from matplotlib import pyplot as plt
 
 BEN_IN = r"C:\Users\BenPc\Documents\GitHub\beach-dune-formatter\sample_data"
@@ -24,9 +34,10 @@ def read_mask_csvs(path_to_dir):
     interpreted to contain data for segment 19).
     """
     # Default value since all testing data is from one state.
-    STATE = 29
+    STATE = np.uint8(29)
     INPUT_COLUMNS = ["LINE_ID", "FIRST_DIST", "FIRST_Z"]
     OUTPUT_COLUMNS = ["profile", "x", "y"]
+    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32]))
 
     if not path_to_dir.endswith("\\"):
         path_to_dir += "\\"
@@ -41,14 +52,15 @@ def read_mask_csvs(path_to_dir):
 
             # If a number was found, read the file and append it to the list.
             if segment is not None:
-                segment = int(segment.group())
+                segment = np.int16(segment.group())
 
                 # Read only the necessary columns and reorder them in the
                 # DataFrame.
                 csv_data = pd.read_csv(path_to_dir + file_name,
-                                  usecols=INPUT_COLUMNS)[INPUT_COLUMNS]
+                                       usecols=INPUT_COLUMNS,
+                                       dtype=DTYPES)[INPUT_COLUMNS]
                 csv_data.rename(columns=dict(zip(INPUT_COLUMNS, OUTPUT_COLUMNS)),
-                           inplace=True)
+                                inplace=True)
                 # Insert a column for the segment and state values.
                 csv_data.insert(loc=0, column="state", value=STATE)
                 csv_data.insert(loc=1, column="segment", value=segment)
@@ -63,14 +75,111 @@ def read_mask_csvs(path_to_dir):
     return pd.concat(csvs).set_index("x", drop=False)
 
 
-### NECESSARY?
-def read_profiles(path_to_out):
-    profiles = pd.read_excel(path_to_out, sheet_name="profiles", index_col=[0, 1, 2])
-    print("\tRead {} rows of data from file '{}'".format(len(profiles), os.path.split(path_to_out)[1]))
-    return profiles
+### DUPLICATE
+def identify_shore(profile_xy):
+    """Returns the x coordinate of the shoreline."""
+    x = profile_xy["x"]
+    y = profile_xy["y"]
+    slope = (y - y.shift(1)) / (x - x.shift(1))
+
+    filt = ((y > 0)
+            # Current y value is the largest so far
+            & (y > y.shift(1).expanding(min_periods=1).max())
+            # Current value and next 4 slope values are positive
+            & (slope.rolling(5).min().shift(-4) >= 0))
+
+    x_coord = filt.idxmax()
+    if x_coord == filt.index[0]:
+        return None
+    else:
+        return x_coord
 
 
+### DUPLICATE
+def identify_crest(profile_xy, shore_x):
+    """Returns the x coordinate of the dune crest."""
+    y = profile_xy.loc[shore_x:]["y"]
+            # Current y value is the largest so far
+    filt = ((y > y.shift(1).expanding(min_periods=1).max())
+            # Difference between current y value and minimum of next 20 > 0.6
+            & (y - y.rolling(20).min().shift(-20) > 0.6)
+            # Current y value > next 10
+            & (y > y.rolling(10).max().shift(-10)))
+
+    x_coord = filt.idxmax()
+    if x_coord == filt.index[0]:
+        return None
+    else:
+        return x_coord
+
+
+### DUPLICATE
+def identify_toe(profile_xy, shore_x, crest_x):
+    """Returns the x coordinate of the dune toe."""
+    subset = profile_xy.loc[shore_x:crest_x]
+    x = subset["x"]
+    y = subset["y"]
+
+    # Polynomial coefficients
+    A, B, C, D = np.polyfit(x=x, y=y, deg=3)
+    differences = y - ((A * x ** 3) + (B * x ** 2) + (C * x) + D)
+    x_coord = differences.idxmin()
+    return x_coord
+
+
+### DUPLICATE
+def identify_heel(profile_df, crest_x):
+    """Returns the x coordinate of the dune heel."""
+    subset = profile_df.loc[crest_x:]
+    y = subset["y"]
+             # Difference between current y value and minimum of next 10 > 0.6
+    filt = ~((y - y.rolling(10).min().shift(-10) > 0.6)
+             # Current y value > max of previous 10 y values
+             & (y > y.rolling(10).max())
+             & (y > y.rolling(20).max().shift(-20)))
+
+    x_coord = y[filt].idxmin()
+    if x_coord == filt.index[0]:
+        return None
+    else:
+        return x_coord
+
+
+### DUPLICATE
+def identify_features(profile_xy):
+    """
+    Returns the coordinates of the shoreline, dune toe, dune crest, and
+    dune heel for a given profile as:
+    (shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y)
+    """
+    shore_x = identify_shore(profile_xy)
+    if shore_x is None:
+        print("\tNo shore for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
+        return None
+
+    crest_x = identify_crest(profile_xy, shore_x)
+    if crest_x is None:
+        print("\tNo crest for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
+        return None
+
+    toe_x = identify_toe(profile_xy, shore_x, crest_x)
+    if toe_x is None:
+        print("\tNo toe for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
+        return None
+
+    heel_x = identify_heel(profile_xy, crest_x)
+    if heel_x is None:
+        print("\tNo heel for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
+        return None
+
+    shore_y, toe_y, crest_y, heel_y = profile_xy.loc[[shore_x, toe_x, crest_x, heel_x], "y"]
+
+    return shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y
+
+
+### identifier has to be [state, seg, prof]
 def plot_profile(profile_xy, identifier, points=[[], []]):
+    """Plot a profile given its xy data"""
     x = profile_xy["x"]
     y = profile_xy["y"]
 
@@ -81,13 +190,14 @@ def plot_profile(profile_xy, identifier, points=[[], []]):
         fig = plt.gcf()
 
     num_axes = len(fig.axes)
+    # If 4 profiles have been plotted, use a new figure.
     if num_axes == 4:
         num_axes = 0
         fig = plt.figure(figsize=(10, 10), facecolor="grey")
 
+    # Add axes to the current figure.
     ax = fig.add_subplot(4, 1, num_axes + 1, anchor="N", facecolor="#444444",
                          xmargin=0, ylim=(0, 12.5))
-
     ax.set_title("State: {}, Segment: {}, Profile: {}".format(*identifier))
     ax.set_aspect(10)
     ax.fill_between(x, y, color="tan")
@@ -97,21 +207,24 @@ def plot_profile(profile_xy, identifier, points=[[], []]):
     plt.tight_layout(h_pad=0.1)
 
 
+### ASSUMES DATA CAN BE GROUPED BY state, segment, profile
+### ASSUMES identifier IS OF FORM [num1, num2, num3]
 def main(input_path, output_path):
     print("\nReading .csvs...")
     xy_data = read_mask_csvs(input_path)
-    print("Reading profiles...")
-    profiles = read_profiles(output_path)
-
+    #print("Reading profiles...")
+    #profiles = read_profiles(output_path)
 
     help_msg = ("\nPlotting Data:"
         "\n- Enter the 3 number identifier of a profile, seperated by any"
-        " characters, to plot it (i.e. '29 18 0')"
+        " characters, to prepare a plot (i.e. '29 18 0')"
         "\n- Type 'plot' to display the data"
-        "\n- Press ctrl+C or type 'quit' or 'q' to stop the script\n")
+        "\n- Press ctrl+C or type 'quit' or 'q' to stop the script"
+        "\n- Type 'help' to display this message\n")
 
     print(help_msg)
     grouped_xy = xy_data.groupby(["state", "segment", "profile"])
+    identifiers = xy_data.set_index(["state", "segment", "profile"]).index
     while True:
         action = input("> ").lower().strip()
         if action == "plot":
@@ -124,9 +237,10 @@ def main(input_path, output_path):
         else:
             identifier = tuple([int(i) for i in re.findall(r"\d+", action)])
             if len(identifier) == 3:
-                if identifier in profiles.index:
-                    features_x = profiles.loc[identifier, ["shore_x", "toe_x", "crest_x", "heel_x"]]
-                    features_y = profiles.loc[identifier, ["shore_y", "toe_y", "crest_y", "heel_y"]]
+                if identifier in identifiers:
+                    feature_data = identify_features(grouped_xy.get_group(identifier))
+                    features_x = feature_data[::2]
+                    features_y = feature_data[1::2]
                     plot_profile(grouped_xy.get_group(identifier),
                                  identifier=identifier,
                                  points=(features_x, features_y))
