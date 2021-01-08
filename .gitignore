@@ -2,3 +2,4 @@
 BeachDuneFormatter.~py
 *.~py
 out.xlsx
+*.pyc
