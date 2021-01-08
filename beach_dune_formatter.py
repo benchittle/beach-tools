@@ -11,14 +11,13 @@ import os, re, time
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
+import extraction_tools as extract
 
 
 BEN_IN = r"C:\Users\Ben2020\Documents\GitHub\beach-dune-formatter\sample_data"
 BEN_OUT = r"C:\Users\Ben2020\Documents\GitHub\beach-dune-formatter\out.xlsx"
 UNI_IN = r"E:\SA\Runs\Poly\tables"
 UNI_OUT =  r"E:\SA\Runs\Poly\tables\b_poly.xlsx"
-
-
 ####################### PATH SETTINGS #######################
 # Change these variables to modify the input and output paths
 # (type the path directly using the format above if needed,
@@ -26,6 +25,16 @@ UNI_OUT =  r"E:\SA\Runs\Poly\tables\b_poly.xlsx"
 current_input = BEN_IN
 current_output = BEN_OUT
 #############################################################
+
+
+METHOD_RR = extract.identify_features_rr
+METHOD_RR_FAR = extract.identify_features_rrfar
+METHOD_IP = extract.identify_features_ip
+METHOD_POLY = extract.identify_features_poly
+########################### MODE ################################
+# Change this variable to specify the extraction method.
+method = METHOD_POLY
+#################################################################
 
 
 def read_mask_csvs(path_to_dir):
@@ -82,150 +91,9 @@ def read_mask_csvs(path_to_dir):
     return pd.concat(csvs)
 
 
-def identify_shore(profile_xy):
-    """Returns the x coordinate of the shoreline."""
-    # Distance values.
-    x = profile_xy["x"]
-    # Elevation values.
-    y = profile_xy["y"]
-    # Slope values.
-    slope = (y - y.shift(1)) / (x - x.shift(1))
-
-    # Create a Truth series for filtering the profile by certain conditions.
-                # Current y value is greater than 0.
-    filtered = ((y > 0)
-                # Current y value is the largest so far.
-                & (y > y.shift(1).expanding(min_periods=1).max())
-                # Current value and next 4 slope values are positive.
-                & (slope.rolling(5).min().shift(-4) >= 0))
-
-    # The shore x coordinate is identified at the first position that satisfies
-    # the filter.
-    x_coord = filtered.idxmax()
-    # If no positions satistfied the filter, return no shore.
-    if filtered[x_coord]:
-        return None
-    else:
-        return x_coord
-
-
-def identify_crest(profile_xy, shore_x):
-    """Returns the x coordinate of the dune crest."""
-    # A subset of the profile data from beyond the identified shore. The crest
-    # can only be found within this subset.
-    subset = profile_xy.loc[shore_x:]
-    # Elevation values.
-    y = subset["y"]
-
-    # Create a Truth series for filtering the profile by certain conditions.
-            # Current elevation is the largest so far.
-    filtered = ((y > y.shift(1).expanding(min_periods=1).max())
-                # There is an elevation change of more than 0.6 in the next 20 values.
-                & (y - y.rolling(20).min().shift(-20) > 0.6)
-                # Current elevation is greater than next 10.
-                & (y > y.rolling(10).max().shift(-10)))
-
-    # The crest x coordinate is identified at the first position that satisfies
-    # the filter.
-    x_coord = filtered.idxmax()
-    # If no positions satistfied the filter, return no crest.
-    if filtered[x_coord] == False:
-        return None
-    else:
-        return x_coord
-
-
-def identify_toe(profile_xy, shore_x, crest_x):
-    """Returns the x coordinate of the dune toe."""
-    # A subset of the profile's data from the identified shore to the 
-    # identified crest. The toe can only be found within this subset.
-    subset = profile_xy.loc[shore_x:crest_x]
-    # Distance values.
-    x = subset["x"]
-    # Elevation values.
-    y = subset["y"]
-
-    # Polynomial coefficients
-    A, B, C, D = np.polyfit(x=x, y=y, deg=3)
-    # Subtract the elevation values by the polynomial evaluated at the
-    # corresponding x coordinate.
-    differences = y - ((A * x * x * x) + (B * x * x) + (C * x) + D)
-    # The toe x coordinate is identified as the x coordinate corresponding to
-    # the minimum value in the above differences series.
-    x_coord = differences.idxmin()
-    if x_coord == shore_x or x_coord == crest_x:
-        return None
-    else:
-        return x_coord
-
-
-def identify_heel(profile_df, crest_x):
-    """Returns the x coordinate of the dune heel."""
-    # A subset of the profile data from beyond the identified crest. The heel
-    # can only be found within this subset.
-    subset = profile_df.loc[crest_x:]
-    # Elevation values
-    y = subset["y"]
-    # Create a Truth series for filtering the data by some conditions. Note
-    # that the "~" symbol inverts the filter i.e. the conditions determine what
-    # data to exclude, rather than what data to include as seen previously.
-                # There is an elevation change of more than 0.6 in the next 10 values.
-    filtered = ~((y - y.rolling(10).min().shift(-10) > 0.6)
-                # Current elevation is greater than previous 10.
-                & (y > y.rolling(10).max())
-                # Current elevation is greater than next 20.
-                & (y > y.rolling(20).max().shift(-20)))
-    # If no positions satistfied the filter, return no heel.
-    if filtered.all():
-        return None
-    else:
-        # Returns the x coordinate of the heel. It is identified at the 
-        # position with the minimum y value after filtering the y values.
-        return y[filtered].idxmin()
-
-
 def grouped_mean(profiles, n):
     """Returns a new DataFrame with the mean of every n rows for each column."""
     return profiles.groupby(np.arange(len(profiles)) // n).mean()
-
-
-def identify_features(profile_xy):
-    """
-    Returns the coordinates of the shoreline, dune toe, dune crest, and
-    dune heel for a given profile as:
-    (shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y)
-    """
-    # Make sure the DataFrame uses the x values as the index. This makes it
-    # easy to look up y values corresponding to a given x.
-    profile_xy = profile_xy.set_index("x", drop=False)
-    # Identify the shore x coordinate if it exists.
-    shore_x = identify_shore(profile_xy)
-    if shore_x is None:
-        print("\tNo shore for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
-        return None
-    
-    # Identify the crest x coordinate if it exists.
-    crest_x = identify_crest(profile_xy, shore_x)
-    if crest_x is None:
-        print("\tNo crest for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
-        return None
-
-    # Identify the toe x coordinate if it exists.
-    toe_x = identify_toe(profile_xy, shore_x, crest_x)
-    if toe_x is None:
-        print("\tNo toe for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
-        return None
-
-    # Identify the heel x coordinate if it exists.
-    heel_x = identify_heel(profile_xy, crest_x)
-    if heel_x is None:
-        print("\tNo heel for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
-        return None
-
-    # Retrieve the y values for the above features.
-    shore_y, toe_y, crest_y, heel_y = profile_xy.loc[[shore_x, toe_x, crest_x, heel_x], "y"]
-
-    return shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y
 
 
 def measure_volume(profile_xy, start_x, end_x, profile_spacing, base_elevation=0):
@@ -316,7 +184,7 @@ def write_data_excel(path_to_file, dataframes, names):
 
 ### HAVE THE USER DECLARE HOW THEIR DATA IS CATEGORIZED / ORGANIZED
 ### (need to know for groupby operations)
-def main(input_path, output_path):
+def main(input_path, output_path, feature_id_method):
     FEATURE_COLUMNS = ["shore_x",  "shore_y", "toe_x", "toe_y", "crest_x",
                        "crest_y", "heel_x", "heel_y"]
 
@@ -337,7 +205,8 @@ def main(input_path, output_path):
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data. This data will be returned as a Pandas Series
     # containing tuples of the 4 pairs of coordinates for each profile.
-    profiles = xy_data.groupby(["state", "segment", "profile"]).apply(identify_features)
+    profiles = xy_data.groupby(["state", "segment", "profile"]).apply(extract.identify_features_poly)
+    print(profiles)
 
     # Expand the Series of tuples into a DataFrame where each column contains an
     # x or y componenent of a feature.
@@ -425,6 +294,7 @@ def main(input_path, output_path):
                                  corr2, averaged_beach_data),
                      names=("profiles", "unfiltered", "corr_1", "filtered",
                             "corr_2", "averages"))
+    print("\tDone writing to {}".format(output_path))
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
 
     print("\nTotal time: {:.2f} seconds".format(time.perf_counter() - initial_start_time))
@@ -434,5 +304,5 @@ def main(input_path, output_path):
 
 if __name__ == "__main__":
     #xy_data, profiles, beach_data, filtered_beach_data, avg = main(current_input, current_output)
-    main(current_input, current_output)
+    main(current_input, current_output, method)
 
