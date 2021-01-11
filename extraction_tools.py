@@ -178,54 +178,38 @@ def identify_toe_poly(profile_xy, shore_x, crest_x):
         return x_coord
     
     
- def identify_toe_lcp(profile_df, shore_x, crest_x):
-            """Returns the dune toe coordinates for the given profile."""
-            # If no crest was found, returns NaN values.
-            if crest_x is numpy.nan:
-                return (numpy.nan, numpy.nan)
-            # Create a subset of the profile's data from the identified shore
-            # to the identified crest. The dune toe can only be found within
-            # this subset.
-            subset = profile_df.loc[shore_x:crest_x].iloc[1:-1]
-            # Distance values
-            x = subset["x"]
-            # Elevation values
-            y = subset["y"]
-            # Creates coefficients for the cubic polynomial (like LINEST in
-            # Excel).
-            xcoords= [shore_x, crest_x]
-            ycoords= [min(y), max(y)]
+def identify_toe_lcp(profile_df, shore_x, crest_x):
+    """Returns the dune toe coordinates for the given profile."""
+    # Create a subset of the profile's data from the identified shore
+    # to the identified crest. The dune toe can only be found within
+    # this subset.
+    subset = profile_df.loc[shore_x:crest_x]
+    # Distance values
+    x = subset["x"]
+    # Elevation values
+    y = subset["y"]
 
-            A, B = numpy.polyfit(
-                x = (xcoords),
-                y = (ycoords),
-                deg = 1
-                )
-            # Creates a new column in thc profile's DataFrame containing the
-            # difference of the cubic from the elevation for each row.
-##            (not sure about the acccuracy of this explanation...)
-            subset = subset.assign(
-                diff=subset["y"] - ((A * subset.index) + B)
-                )
-##            Difference of the cubic from the elevation values
-            diff = subset["diff"]
-            # Creates a new DataFrame by filtering the subset by certain
-            # conditions.
-            df = subset[
-                (crest_x - x > 2)
-                &(x-shore_x > 5)# Toe must be at least 2 meters away from the crest
-                ]
-            # Identifies the x value at the minimum cubic-elevation difference
-            # value. (This part is different compared to the other functions;
-            # however, additional conditions can still be added in the same
-            # way.)
-            toe_x = df["diff"].idxmin()
-            # Determines the y coordinate to return by finding the corresponding
-            # y value at the identified toe x coordinate.
-            return (toe_x, subset.at[toe_x, "y"])
+    # Determines coefficients for the linear polynomial.
+    A, B = numpy.polyfit(x=[shore_x, crest_x], y=[y.min(), y.max()], deg=1)
+    # Subtract the elevation values by the polynomial.
+    differences = y - (A * x + B)
+
+    # Create a Truth Series for filtering the differences by certain conditions. 
+                # Toe must be more than 2 units away from crest.
+    filtered = ((crest_x - x > 2)
+                # Toe must be more than 5 units away from shore.
+                & (x - shore_x > 5))
+                
+    # Identifies the x value at the minimum cubic-elevation difference
+    # value. (This part is different compared to the other functions;
+    # however, additional conditions can still be added in the same
+    # way.)
+    toe_x = differences[filtered].idxmin()
+    if x_coord == shore_x or x_coord == crest_x:
+        return None
+    else:
+        return x_coord
    
-
-
 
 ############################### CREST FUNCTIONS ###############################
 
@@ -277,9 +261,9 @@ def identify_crest_reg(profile_df, shore_x):
     # Create a Truth Series for filtering the subset by certain conditions.
                 # Current elevation is the largest so far
     filtered = ((y > y.shift(1).expanding(min_periods=1).max()) 
-                # There is an elevation change of at least 2 in the next 20 values
+                # There is an elevation change of more than 2 in the next 20 values
                 & (y - y.rolling(20).min().shift(-20) > 2) 
-                # Current y value > next 10
+                # Current elevation is greater than the next 10 values.
                 & (y > y.rolling(10).max().shift(-10))) 
 
     # The crest x coordinate is identified at the first position that satisfies
@@ -295,8 +279,6 @@ def identify_crest_reg(profile_df, shore_x):
 ################################ HEEL FUNCTIONS ###############################
 
 
-#this heel definition is currently the same as the other methods, 
-#it needs to be assigned a threshold, check literature, 0.4?
 def identify_heel_rr(profile_df, crest_x):
     """Returns the dune heel coordinates for the given profile."""
     # Create a subset of the profile's data from the identified crest
@@ -306,7 +288,7 @@ def identify_heel_rr(profile_df, crest_x):
     x = subset["x"]
     # Elevation values
     y = subset["y"]
-    # RR values
+    # Relative relief values
     rr = subset["RR"]
 
     # Create a new DataFrame by filtering the data by some conditions. Note
