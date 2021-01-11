@@ -294,9 +294,8 @@ def identify_heel_rr(profile_df, crest_x):
     # Create a new DataFrame by filtering the data by some conditions. Note
     # that the "~" symbol inverts the filter i.e. the conditions determine what
     # data to exclude, rather than what data to include as seen previously.
-                
-    filtered =  # Horizontal position is 5m past the crest position
-                & (x - crest_x > 5)
+                # Horizontal position is 5m past the crest position
+    filtered =  ((x - crest_x > 5)
                 # RR 2m previous is greater than 0.4
                 & (rr.shift(2) > 0.4)
                 # RR 2m in advance is less than 0.4
