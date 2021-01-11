@@ -176,6 +176,55 @@ def identify_toe_poly(profile_xy, shore_x, crest_x):
         return None
     else:
         return x_coord
+    
+    
+ def identify_toe_lcp(profile_df, shore_x, crest_x):
+            """Returns the dune toe coordinates for the given profile."""
+            # If no crest was found, returns NaN values.
+            if crest_x is numpy.nan:
+                return (numpy.nan, numpy.nan)
+            # Create a subset of the profile's data from the identified shore
+            # to the identified crest. The dune toe can only be found within
+            # this subset.
+            subset = profile_df.loc[shore_x:crest_x].iloc[1:-1]
+            # Distance values
+            x = subset["x"]
+            # Elevation values
+            y = subset["y"]
+            # Creates coefficients for the cubic polynomial (like LINEST in
+            # Excel).
+            xcoords= [shore_x, crest_x]
+            ycoords= [min(y), max(y)]
+
+            A, B = numpy.polyfit(
+                x = (xcoords),
+                y = (ycoords),
+                deg = 1
+                )
+            # Creates a new column in thc profile's DataFrame containing the
+            # difference of the cubic from the elevation for each row.
+##            (not sure about the acccuracy of this explanation...)
+            subset = subset.assign(
+                diff=subset["y"] - ((A * subset.index) + B)
+                )
+##            Difference of the cubic from the elevation values
+            diff = subset["diff"]
+            # Creates a new DataFrame by filtering the subset by certain
+            # conditions.
+            df = subset[
+                (crest_x - x > 2)
+                &(x-shore_x > 5)# Toe must be at least 2 meters away from the crest
+                ]
+            # Identifies the x value at the minimum cubic-elevation difference
+            # value. (This part is different compared to the other functions;
+            # however, additional conditions can still be added in the same
+            # way.)
+            toe_x = df["diff"].idxmin()
+            # Determines the y coordinate to return by finding the corresponding
+            # y value at the identified toe x coordinate.
+            return (toe_x, subset.at[toe_x, "y"])
+   
+
 
 
 ############################### CREST FUNCTIONS ###############################
@@ -254,19 +303,24 @@ def identify_heel_rr(profile_df, crest_x):
     # onward. The dune heel can only be found within this subset.
     subset = profile_df.loc[crest_x:]
     # Distance values
-    #x = subset["x"]
+    x = subset["x"]
     # Elevation values
     y = subset["y"]
+    # RR values
+    rr = subset["RR"]
 
     # Create a new DataFrame by filtering the data by some conditions. Note
     # that the "~" symbol inverts the filter i.e. the conditions determine what
     # data to exclude, rather than what data to include as seen previously.
-                # There is an elevation change of more than 0.6 in the next 10 values.
-    filtered = ~((y - y.rolling(10).min().shift(-10) > 0.6)
-                # Current elevation is greater than previous 10.
-                & (y > y.rolling(10).max())
-                # Current elevation is greater than next 10.
-                & (y > y.rolling(10).max().shift(-10)))
+                
+    filtered =  # Horizontal position is 5m past the crest position
+                & (x - crest_x > 5)
+                # RR 2m previous is greater than 0.4
+                & (rr.shift(2) > 0.4)
+                # RR 2m in advance is less than 0.4
+                & (rr.shift(-2) < 0.4))
+                # Add x and y filter criteria as needed
+            
     # If no positions satistfied the filter, return None.
     if not filtered.any():
         return None
@@ -430,6 +484,38 @@ def identify_features_poly(profile_xy):
         return None
     # Identify the toe x coordinate if it exists.
     toe_x = identify_toe_poly(profile_xy, shore_x, crest_x)
+    if toe_x is None:
+        return None
+    # Identify the heel x coordinate if it exists.
+    heel_x = identify_heel_reg(profile_xy, crest_x)
+    if heel_x is None:
+        return None
+
+    # Retrieve the y values for the above features.
+    shore_y, toe_y, crest_y, heel_y = profile_xy.loc[[shore_x, toe_x, crest_x, heel_x], "y"]
+    
+    return shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y
+
+def identify_features_lcp(profile_xy):
+    """
+    Returns the coordinates of the shoreline, dune toe, dune crest, and
+    dune heel for a given profile as:
+    (shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y)
+    """
+    # Make sure the DataFrame uses the x values as the index. This makes it
+    # easy to look up y values corresponding to a given x.
+    profile_xy = profile_xy.set_index("x", drop=False)
+
+    # Identify the shore x coordinate if it exists.
+    shore_x = identify_shore(profile_xy)
+    if shore_x is None:
+        return None
+    # Identify the crest x coordinate if it exists.
+    crest_x = identify_crest_reg(profile_xy, shore_x)
+    if crest_x is None:
+        return None
+    # Identify the toe x coordinate if it exists.
+    toe_x = identify_toe_lcp(profile_xy, shore_x, crest_x)
     if toe_x is None:
         return None
     # Identify the heel x coordinate if it exists.
