@@ -190,7 +190,7 @@ def identify_toe_lcp(profile_df, shore_x, crest_x):
     y = subset["y"]
 
     # Determines coefficients for the linear polynomial.
-    A, B = numpy.polyfit(x=[shore_x, crest_x], y=[y.min(), y.max()], deg=1)
+    A, B = np.polyfit(x=[shore_x, crest_x], y=[y.min(), y.max()], deg=1)
     # Subtract the elevation values by the polynomial.
     differences = y - (A * x + B)
 
@@ -204,7 +204,7 @@ def identify_toe_lcp(profile_df, shore_x, crest_x):
     # value. (This part is different compared to the other functions;
     # however, additional conditions can still be added in the same
     # way.)
-    toe_x = differences[filtered].idxmin()
+    x_coord = differences[filtered].idxmin()
     if x_coord == shore_x or x_coord == crest_x:
         return None
     else:
