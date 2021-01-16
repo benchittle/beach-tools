@@ -7,11 +7,11 @@
 import os, re, time
 import pandas as pd
 import numpy as np
-import extraction_tools as extract
+import extraction_tools_old as extract
 
 
-BEN_IN = r"C:\Users\Ben2020\Documents\GitHub\beach-dune-formatter\sample_data"
-BEN_OUT = r"C:\Users\Ben2020\Documents\GitHub\beach-dune-formatter\out.xlsx"
+BEN_IN = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data"
+BEN_OUT = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data\out_old.xlsx"
 UNI_IN = r"E:\SA\Runs\Poly\tables"
 UNI_OUT =  r"E:\SA\Runs\Poly\tables\b_poly.xlsx"
 ####################### PATH SETTINGS #######################
@@ -23,13 +23,13 @@ current_output = BEN_OUT
 #############################################################
 
 
-METHOD_RR = extract.identify_features_rr
-METHOD_RR_FAR = extract.identify_features_rrfar
-METHOD_IP = extract.identify_features_ip
-METHOD_POLY = extract.identify_features_poly
+METHOD_RR = extract.MODES["rr"]
+METHOD_RR_FAR = extract.MODES["rrfar"]
+METHOD_IP = extract.MODES["ip"]
+METHOD_POLY = extract.MODES["poly"]
 ########################### MODE ################################
 # Change this variable to specify the extraction method.
-method = METHOD_POLY
+method = METHOD_RR
 #################################################################
 
 
@@ -42,9 +42,9 @@ def read_mask_csvs(path_to_dir):
     """
     # Default value since all testing data is from one state.
     STATE = np.uint8(29)
-    INPUT_COLUMNS = ["LINE_ID", "FIRST_DIST", "FIRST_Z"]
-    OUTPUT_COLUMNS = ["profile", "x", "y"]
-    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32]))
+    INPUT_COLUMNS = ["LINE_ID", "FIRST_DIST", "FIRST_Z", "FIRST_RR"]
+    OUTPUT_COLUMNS = ["profile", "x", "y", "rr"]
+    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32, np.float32]))
 
     if not path_to_dir.endswith("\\"):
         path_to_dir += "\\"
@@ -201,8 +201,7 @@ def main(input_path, output_path, feature_id_method):
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data. This data will be returned as a Pandas Series
     # containing tuples of the 4 pairs of coordinates for each profile.
-    profiles = xy_data.groupby(["state", "segment", "profile"]).apply(extract.identify_features_poly)
-    print(profiles)
+    profiles = xy_data.groupby(["state", "segment", "profile"]).apply(extract.identify_features(method))
 
     # Expand the Series of tuples into a DataFrame where each column contains an
     # x or y componenent of a feature.
