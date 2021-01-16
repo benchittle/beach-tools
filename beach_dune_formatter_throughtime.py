@@ -8,7 +8,6 @@ import os, re, time
 import pandas as pd
 import numpy as np
 import extraction_tools as extract
-import extraction_tools_old as extract_old
 
 
 BEN_IN = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data"
@@ -23,15 +22,15 @@ current_input = BEN_IN
 current_output = BEN_OUT
 #############################################################
 
-'''
-MODE_RR = extract.MODES["rr"]
-MODE_RR_FAR = extract.MODES["rrfar"]
-MODE_IP = extract.MODES["ip"]
-MODE_POLY = extract.MODES["poly"]
-MODE_LCP = extract.MODES["lcp"]'''
+
+MODE_RR = extract.identify_features_rr
+MODE_RR_FAR = extract.identify_features_rrfar
+#MODE_IP = extract.MODES["ip"]
+#MODE_POLY = extract.MODES["poly"]
+#MODE_LCP = extract.MODES["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction technique.
-mode = 1
+mode = MODE_RR_FAR
 #################################################################
 
 
@@ -206,12 +205,12 @@ def main(input_path, output_path, mode):
 
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
-    first_profiles = extract.identify_features_rrfar(first_xy)
+    first_profiles = mode(first_xy)
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the remaining points in time. 
     remaining_profiles = remaining_xy.groupby("date", group_keys=False
-        ).apply(lambda df: extract.identify_features_rrfar(df, use_toex=first_profiles["toe_x"]))
+        ).apply(lambda df: mode(df, use_toex=first_profiles["toe_x"]))
 
     # Combine all the profile data back into a single DataFrame.
     profiles = pd.concat([first_profiles, remaining_profiles])
