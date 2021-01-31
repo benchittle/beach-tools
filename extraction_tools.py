@@ -76,12 +76,9 @@ def identify_toe_ip(xy_data, shore_x, crest_x, columns):
         (xy_data["x"] > 45)
         & (xy_data["x"] < 63)
         & xy_data["y"] < 3.2].set_index(["state", "segment", "profile"])
-    #shore_x = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
-    #crest_x = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)  
     xy_data.set_index("x", drop=False, append=True, inplace=True)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
-    ### IS ARCTAN NECESSARY?
     slope_change = (grouped["y"].diff(-1) / grouped["x"].diff(-1)).groupby(["state", "segment", "profile"]).diff(-1)
 
     return xy_data.loc[slope_change.groupby(["state", "segment", "profile"]).idxmax()].reset_index("x", drop=True).reset_index()[columns]
@@ -191,100 +188,28 @@ def find_closest_x(xy_data, x):
     return new
 
 
-def identify_features_rr(xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
+def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
     columns = ["date", "state", "segment", "profile", "x", "y", "rr"]
+
     if use_shorex is None:
-        shore = identify_shore_standard(xy_data, columns=columns[:-1])
+        shore = mode["shore"](xy_data, columns=columns)
     else:
         shore = find_closest_x(xy_data, use_shorex)
-
     if use_crestx is None:
-        crest = identify_crest_rr(xy_data, shore_x=shore, columns=columns)
+        crest = mode["crest"](xy_data, shore_x=shore, columns=columns)
     else:
         crest = find_closest_x(xy_data, use_crestx)
-
     if use_toex is None:
-        toe = identify_toe_rr(xy_data, shore_x=shore, crest_x=crest, columns=columns)
+        toe = mode["toe"](xy_data, shore_x=shore, crest_x=crest, columns=columns)
     else:
         toe = find_closest_x(xy_data, use_toex)
-    
     if use_heelx is None:
-        heel = identify_heel_rr(xy_data, crest_x=crest, columns=columns)
+        heel = mode["heel"](xy_data, crest_x=crest, columns=columns)
     else:
         heel = find_closest_x(xy_data, use_heelx)
 
-    for data in (shore, toe, crest, heel):
+    for data, name in zip((shore, toe, crest, heel), ("shore", "toe", "crest", "heel")):
         data.set_index(["date", "state", "segment", "profile"], inplace=True)
-
-    shore.rename(columns={"x":"shore_x", "y":"shore_y"}, inplace=True)
-    toe.rename(columns={"x":"toe_x", "y":"toe_y", "rr":"toe_rr"}, inplace=True)
-    crest.rename(columns={"x":"crest_x", "y":"crest_y", "rr":"crest_rr"}, inplace=True)
-    heel.rename(columns={"x":"heel_x", "y":"heel_y", "rr":"heel_rr"}, inplace=True)
-
-    return pd.concat([shore, toe, crest, heel], axis=1)
-
-
-def identify_features_rrfar(xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
-    columns = ["date", "state", "segment", "profile", "x", "y", "rr"]
-    if use_shorex is None:
-        shore = identify_shore_standard(xy_data, columns=columns[:-1])
-    else:
-        shore = find_closest_x(xy_data, use_shorex)
-
-    if use_crestx is None:
-        crest = identify_crest_rr(xy_data, shore_x=shore, columns=columns)
-    else:
-        crest = find_closest_x(xy_data, use_crestx)
-
-    if use_toex is None:
-        toe = identify_toe_rrfar(xy_data, shore_x=shore, crest_x=crest, columns=columns)
-    else:
-        toe = find_closest_x(xy_data, use_toex)
-    
-    if use_heelx is None:
-        heel = identify_heel_rr(xy_data, crest_x=crest, columns=columns)
-    else:
-        heel = find_closest_x(xy_data, use_heelx)
-
-    for data in (shore, toe, crest, heel):
-        data.set_index(["date", "state", "segment", "profile"], inplace=True)
-
-    shore.rename(columns={"x":"shore_x", "y":"shore_y"}, inplace=True)
-    toe.rename(columns={"x":"toe_x", "y":"toe_y", "rr":"toe_rr"}, inplace=True)
-    crest.rename(columns={"x":"crest_x", "y":"crest_y", "rr":"crest_rr"}, inplace=True)
-    heel.rename(columns={"x":"heel_x", "y":"heel_y", "rr":"heel_rr"}, inplace=True)
-
-    return pd.concat([shore, toe, crest, heel], axis=1)
-
-
-def identify_features_ip(xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
-    columns = ["date", "state", "segment", "profile", "x", "y", "rr"]
-    if use_shorex is None:
-        shore = identify_shore_standard(xy_data, columns=columns[:-1])
-    else:
-        shore = find_closest_x(xy_data, use_shorex)
-
-    if use_crestx is None:
-        crest = identify_crest_standard(xy_data, shore_x=shore, columns=columns)
-    else:
-        crest = find_closest_x(xy_data, use_crestx)
-
-    if use_toex is None:
-        toe = identify_toe_ip(xy_data, shore_x=shore, crest_x=crest, columns=columns)
-    else:
-        toe = find_closest_x(xy_data, use_toex)
-    
-    if use_heelx is None:
-        heel = identify_heel_standard(xy_data, crest_x=crest, columns=columns)
-    else:
-        heel = find_closest_x(xy_data, use_heelx)
-
-    for data in (shore, toe, crest, heel):
-        data.set_index(["date", "state", "segment", "profile"], inplace=True)
-
-    shore.rename(columns={"x":"shore_x", "y":"shore_y"}, inplace=True)
-    toe.rename(columns={"x":"toe_x", "y":"toe_y", "rr":"toe_rr"}, inplace=True)
-    crest.rename(columns={"x":"crest_x", "y":"crest_y", "rr":"crest_rr"}, inplace=True)
-    heel.rename(columns={"x":"heel_x", "y":"heel_y", "rr":"heel_rr"}, inplace=True)
+        data.rename(columns={"x" : name + "_x", "y" : name + "_y", "rr" : name + "_rr"}, inplace=True)
 
     return pd.concat([shore, toe, crest, heel], axis=1)
