@@ -82,7 +82,7 @@ def identify_toe_ip(xy_data, shore_x, crest_x, columns):
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
     ### IS ARCTAN NECESSARY?
-    slope_change = np.arctan(grouped["y"].diff(-1) / grouped["x"].diff(-1)).groupby(["state", "segment", "profile"]).diff(-1)
+    slope_change = (grouped["y"].diff(-1) / grouped["x"].diff(-1)).groupby(["state", "segment", "profile"]).diff(-1)
 
     return xy_data.loc[slope_change.groupby(["state", "segment", "profile"]).idxmax()].reset_index("x", drop=True).reset_index()[columns]
    
