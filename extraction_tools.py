@@ -159,20 +159,22 @@ def identify_heel_rr(xy_data, crest_x, columns):
     ].groupby(["state", "segment", "profile"])["y"].idxmin()].reset_index("x", drop=True).reset_index()[columns]
 
 
-'''
 def identify_heel_standard(xy_data, crest_x, columns):
     xy_data = xy_data.set_index(["state", "segment", "profile"])
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
-    xy_data.set_index("x", drop=False, append=True, inplace=True)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
-    return xy_data.loc[xy_data[
-        (xy_data["x"] > xy_data["crest_x"])
-        & ~((xy_data["y"] - grouped["y"].rolling(10).min().groupby(["state", "segment", "profile"]).shift(-10) > 0.6)
-            & (xy_data["y"] > grouped["y"].rolling(10).max())
-            & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10)))
-    ].groupby(["state", "segment", "profile"])["y"].idxmin()].reset_index("x", drop=True).reset_index()[columns]
-    '''
+
+    print(xy_data.shape)
+
+    mask = ((xy_data["x"] > xy_data["crest_x"])
+        &  ((xy_data["y"] - grouped["y"].rolling(10).min().groupby(["state", "segment", "profile"]).shift(-10) > 0.6)
+            | (xy_data["y"] > grouped["y"].rolling(10).max())
+            | (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10))))
+
+    xy_data.set_index("x", drop=False, append=True, inplace=True)
+    mask.index = xy_data.index
+    return xy_data.loc[xy_data[mask].groupby(["state", "segment", "profile"])["y"].idxmin()].reset_index("x", drop=True).reset_index()[columns]
 
 
 ############################# PROFILE EXTRACTION ##############################
