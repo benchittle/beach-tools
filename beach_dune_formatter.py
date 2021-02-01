@@ -27,9 +27,10 @@ METHOD_RR = extract.MODES["rr"]
 METHOD_RR_FAR = extract.MODES["rrfar"]
 METHOD_IP = extract.MODES["ip"]
 METHOD_POLY = extract.MODES["poly"]
+METHOD_LCP = extract.MODES["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction method.
-method = METHOD_RR
+method = METHOD_LCP
 #################################################################
 
 
