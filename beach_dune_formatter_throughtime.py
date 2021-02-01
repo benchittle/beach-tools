@@ -23,14 +23,14 @@ current_output = BEN_OUT
 #############################################################
 
 
-MODE_RR = extract.identify_features_rr
-MODE_RR_FAR = extract.identify_features_rrfar
-#MODE_IP = extract.MODES["ip"]
-#MODE_POLY = extract.MODES["poly"]
-#MODE_LCP = extract.MODES["lcp"]
+MODE_RR = extract.MODES["rr"]
+MODE_RR_FAR = extract.MODES["rrfar"]
+MODE_IP = extract.MODES["ip"]
+MODE_POLY = extract.MODES["poly"]
+MODE_LCP = extract.MODES["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction technique.
-mode = MODE_RR_FAR
+mode = MODE_LCP
 #################################################################
 
 
@@ -182,6 +182,8 @@ def write_data_excel(path_to_file, dataframes, names):
 ### HAVE THE USER DECLARE HOW THEIR DATA IS CATEGORIZED / ORGANIZED
 ### (need to know for groupby operations)
 def main(input_path, output_path, mode):
+
+
     pd.options.display.max_columns = 15
     pd.options.display.width = 180
 
@@ -190,8 +192,7 @@ def main(input_path, output_path, mode):
     print("\nReading .csv's...")
     start_time = time.perf_counter()
     xy_data = read_mask_csvs(input_path)
-    print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time)) 
-    
+    print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))     
 
     print("\nIdentifying features...")
     # Sort the data from earliest to latest.
@@ -202,15 +203,15 @@ def main(input_path, output_path, mode):
     first_xy = xy_data[first_timesnap_filter]
     # Get the data for the remaining time snap.
     remaining_xy = xy_data[~first_timesnap_filter]   
-
+    
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
-    first_profiles = mode(first_xy)
+    first_profiles = extract.identify_features(mode, first_xy)
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the remaining points in time. 
     remaining_profiles = remaining_xy.groupby("date", group_keys=False
-        ).apply(lambda df: mode(df, use_toex=first_profiles["toe_x"]))
+        ).apply(lambda df: extract.identify_features(mode, df, use_toex=first_profiles["toe_x"]))
 
     # Combine all the profile data back into a single DataFrame.
     profiles = pd.concat([first_profiles, remaining_profiles])
