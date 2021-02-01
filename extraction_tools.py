@@ -5,7 +5,6 @@
 #-------------------------------------------------------------------------------
 import pandas as pd
 import numpy as np
-import extraction_tools as extract_old
 
 
 ############################### SHORE FUNCTIONS ###############################
@@ -83,29 +82,51 @@ def identify_toe_ip(xy_data, shore_x, crest_x, columns):
 
     return xy_data.loc[slope_change.groupby(["state", "segment", "profile"]).idxmax()].reset_index("x", drop=True).reset_index()[columns]
    
-'''
-def identify_toe_poly(xy_data, shore_x, crest_x, columns):    
-    xy_data = xy_data.set_index(["state", "segment", "profile"])
-    shore_x = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
-    crest_x = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
-    xy_data = xy_data[
-        (xy_data["x"] > shore_x)
-        & (xy_data["x"] < crest_x)]
+def _identify_toe_poly_old(profile_xy):
+    """Returns the x coordinate of the dune toe."""
+    profile_xy.set_index("x", drop=False, inplace=True)
+    shore_x = profile_xy["shore_x"].iat[0]
+    crest_x = profile_xy["crest_x"].iat[0]
+    # A subset of the profile's data from the identified shore to the 
+    # identified crest. The toe can only be found within this subset.
+    subset = profile_xy.loc[shore_x:crest_x]
     
-    coeffs = xy_data.groupby(["state", "segment", "profile"]).apply(lambda df: np.polyfit(x=df["x"], y=df["y"], deg=3))
-    coeffs = pd.DataFrame(coeffs.to_list(), columns=["a", "b", "c", "d"], index=coeffs.index).reindex(xy_data.index)
+    # Distance values.
+    x = subset["x"]
+    # Elevation values.
+    y = subset["y"]
 
-    #print(coeffs)
+    # Polynomial coefficients.
+    A, B, C, D = np.polyfit(x=x, y=y, deg=3)
+    # Subtract the elevation values by the polynomial.
+    differences = y - ((A * x * x * x) + (B * x * x) + (C * x) + D)
+    # Create a Truth Series for filtering the differences by certain conditions. 
+                # Toe must be more than 5m from crest.
+    filtered = ((crest_x - x > 5)
+                # Toe must be at least 10 meters away from the crest. 10m has been specified for Libbys Site at Brackley Beach.
+                & (x > 40))
+    # The toe x coordinate is identified as the x coordinate corresponding to
+    # the minimum value in the above differences series after being filtered.
+    try:
+        x_coord = differences[filtered].idxmin()
+    except ValueError:
+        return None
+    if x_coord == shore_x or x_coord == crest_x:
+        return None
+    else:
+        return x_coord
 
-    differences = (xy_data["y"]
-                - coeffs["a"] * xy_data["x"] * xy_data["x"] * xy_data["x"]
-                - coeffs["b"] * xy_data["x"] * xy_data["x"]
-                - coeffs["c"] * xy_data["x"]
-                - coeffs["d"])
 
-    return xy_data[differences[(crest_x - xy_data["x"] > 5) & (xy_data["x"] > 40)].idxmin()#][columns]
-'''
+def identify_toe_poly(xy_data, shore_x, crest_x, columns): 
+    xy_data = xy_data.set_index(["state", "segment", "profile"])
+    xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
+    xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
+
+    data = xy_data.dropna().groupby(["state", "segment", "profile"]).apply(_identify_toe_poly_old).rename("x")
+
+    return xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(data.reset_index())].reset_index()[columns]
+
 
 ############################### CREST FUNCTIONS ###############################
 
@@ -173,7 +194,12 @@ def identify_heel_standard(xy_data, crest_x, columns):
 
 
 ############################# PROFILE EXTRACTION ##############################
-
+MODES = {
+    "rr" : {"shore":identify_shore_standard, "toe":identify_toe_rr, "crest":identify_crest_rr, "heel":identify_heel_rr},
+    "rrfar" : {"shore":identify_shore_standard, "toe":identify_toe_rrfar, "crest":identify_crest_rr, "heel":identify_heel_rr},
+    "ip" : {"shore":identify_shore_standard, "toe":identify_toe_ip, "crest":identify_crest_standard, "heel":identify_heel_standard},
+    "poly" : {"shore":identify_shore_standard, "toe":identify_toe_poly, "crest":identify_crest_standard, "heel":identify_heel_standard}
+}
 
 def find_closest_x(xy_data, x):
     # x must have index of date state seg profile
