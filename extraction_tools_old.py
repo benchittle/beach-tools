@@ -427,9 +427,3 @@ def identify_features(mode): #, shorex=None, toex=None, crestx=None, heelx=None)
         return (shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y)
 
     return _identify_features
-
-
-def find_closest_x(profile_xy, x):
-    if np.isnan(x):
-        return None
-    return profile_xy.at[(profile_xy["x"] - x).abs().idxmin(), "x"]
