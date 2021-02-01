@@ -21,11 +21,18 @@ def identify_shore_standard(xy_data, columns):
     # above calculation).
     #slope.loc[xy_data["profile"] != xy_data["profile"].shift(-1)] = None
 
+    # Filtering the data:
     return xy_data[
+        # Minimum distance of 10.
         (xy_data["x"] > 10)
+        # Minimum elevation of more than 0.75.
         & (xy_data["y"] > 0.75)
+        # Maximum elevation of less than 0.85.
         & (xy_data["y"] < 0.85)
+        # Positive or 0 slope in the next 2 values.
         & (slope.rolling(2).min().shift(-2) >= 0)
+    # Extract the first position that satisfied the above conditions from each
+    # profile, if any exist, and return the data for the selected columns.
     ].groupby(["state", "segment", "profile"]).head(1)[columns]
     
     '''xy_data.query(
@@ -40,47 +47,77 @@ def identify_shore_standard(xy_data, columns):
 
 def identify_toe_rr(xy_data, shore_x, crest_x, columns):
     xy_data = xy_data.set_index(["state", "segment", "profile"])
+    # Insert columns for the shore and crest values for each profile in xy_data.
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
+    # Filtering the data:
     return xy_data[
+        # Toe must be past shore.
         (xy_data["x"] > xy_data["shore_x"])
+        # Toe must be more than 3 units before crest.
         & (xy_data["x"] < xy_data["crest_x"] - 3)
+        # Maximum relative relief of 0.25.
         & (xy_data["rr"] <= 0.25)
+        # Previous relative relief less than 0.25.
         & (grouped["rr"].shift(1) < 0.25)
+        # Next relative relief greater than 0.25.
         & (grouped["rr"].shift(-1) > 0.25)
+        # 25 for november, sept and july are at 40, 50 for July2020
         & (xy_data["x"] > 50)
+    # Extract the first position that satisfied the above conditions from each
+    # profile, if any exist, and return the data for the selected columns.
     ].groupby(["state", "segment", "profile"]).head(1).reset_index()[columns]
 
 
 def identify_toe_rrfar(xy_data, shore_x, crest_x, columns):
     xy_data = xy_data.set_index(["state", "segment", "profile"])
+    # Insert columns for the shore and crest values for each profile in xy_data.
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
+    # Filtering the data:
     return xy_data[
+        # Toe must be past shore.
         (xy_data["x"] > xy_data["shore_x"])
+        # Toe must be more than 10 units before crest.
         & (xy_data["x"] < xy_data["crest_x"] - 10)
+        # Minimum relative relief of 0.25.
         & (xy_data["rr"] >= 0.25)
+        # Previous relative relief greater than 0.25.
         & (grouped["rr"].shift(1) > 0.25)
+        # Next relative relief less than 0.25.
         & (grouped["rr"].shift(-1) < 0.25)
+        # 25 for november, sept and july are at 40.
         & (xy_data["x"] > 40)
+    # Extract the first position that satisfied the above conditions from each
+    # profile, if any exist, and return the data for the selected columns.
     ].groupby(["state", "segment", "profile"]).head(1).reset_index()[columns]
 
 
 def identify_toe_ip(xy_data, shore_x, crest_x, columns):
+    # Filtering the data:
     xy_data = xy_data[
+        # Minimum distance of more than 45.
         (xy_data["x"] > 45)
+        # Maximum distance of less than 63.
         & (xy_data["x"] < 63)
-        & xy_data["y"] < 3.2].set_index(["state", "segment", "profile"])
+        # Maximum elevation of less than 3.2.
+        & xy_data["y"] < 3.2]
+    
+    xy_data.set_index(["state", "segment", "profile"], inplace=True)
     xy_data.set_index("x", drop=False, append=True, inplace=True)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
+    # Calculate the change in slope between each point for each profile.
     slope_change = (grouped["y"].diff(-1) / grouped["x"].diff(-1)).groupby(["state", "segment", "profile"]).diff(-1)
 
-    return xy_data.loc[slope_change.groupby(["state", "segment", "profile"]).idxmax()].reset_index("x", drop=True).reset_index()[columns]
+    # Identify the toe as the point with the greatest change in slope for each
+    # profile and return the data for the selected columns.
+    return xy_data.loc[slope_change.groupby(["state", "segment", "profile"]).idxmax()
+        ].reset_index("x", drop=True).reset_index()[columns]
    
 
 def _identify_toe_poly_old(profile_xy):
@@ -119,12 +156,18 @@ def _identify_toe_poly_old(profile_xy):
 
 def identify_toe_poly(xy_data, shore_x, crest_x, columns): 
     xy_data = xy_data.set_index(["state", "segment", "profile"])
+    # Insert columns for the shore and crest values for each profile in xy_data.
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
-    data = xy_data.dropna().groupby(["state", "segment", "profile"]).apply(_identify_toe_poly_old).rename("x")
+    # Apply the old polynomial toe identification function profile-wise on the 
+    # DataFrame.
+    toes = xy_data.dropna().groupby(["state", "segment", "profile"]).apply(_identify_toe_poly_old).rename("x")
+    # Extract the rows corresponding to each identified toe in the original data.
+    toes = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toe_x.reset_index())]
 
-    return xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(data.reset_index())].reset_index()[columns]
+    # Return the data for the selected columns.
+    return toes.reset_index()[columns]
 
 
 def _identify_toe_lcp_old(profile_xy):
@@ -165,12 +208,18 @@ def _identify_toe_lcp_old(profile_xy):
 
 def identify_toe_lcp(xy_data, shore_x, crest_x, columns): 
     xy_data = xy_data.set_index(["state", "segment", "profile"])
+    # Insert columns for the shore and crest values for each profile in xy_data.
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
-    data = xy_data.dropna().groupby(["state", "segment", "profile"]).apply(_identify_toe_lcp_old).rename("x")
+    # Apply the old LCP toe identification function profile-wise on the 
+    # DataFrame.
+    toes = xy_data.dropna().groupby(["state", "segment", "profile"]).apply(_identify_toe_lcp_old).rename("x")
+    # Extract the rows corresponding to each identified toe in the original data.
+    toes = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toes.reset_index())]
 
-    return xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(data.reset_index())].reset_index()[columns]
+    # Return the data for the selected columns.
+    return toes.reset_index()[columns]
 
 
 ############################### CREST FUNCTIONS ###############################
@@ -178,16 +227,25 @@ def identify_toe_lcp(xy_data, shore_x, crest_x, columns):
 
 def identify_crest_rr(xy_data, shore_x, columns):
     xy_data = xy_data.set_index(["state", "segment", "profile"])
+    # Insert columns for the crest values for each profile in xy_data.
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
     return xy_data[
+        # Crest must be past shore.
         (xy_data["x"] > xy_data["shore_x"])
+        # Minimum distance of more than 30.
         & (xy_data["x"] > 30)
+        # Maximum distance of less than 85.
         & (xy_data["x"] < 85)
+        # Minimum relative relief of more than 0.55.
         & (xy_data["rr"] > 0.55)
-        & (xy_data["y"] > grouped["y"].shift(-15)) ######################
-        & (xy_data["rr"] > grouped["rr"].shift(-2))
+#############################################################
+#############################################################
+        & (xy_data["y"] > grouped["y"].shift(-15)) 
+#############################################################
+#############################################################
+        & (xy_data["rr"] > grouped["rr"].shift(2))
         & (xy_data["rr"] > grouped["rr"].shift(-2))
     ].groupby(["state", "segment", "profile"]).head(1).reset_index()[columns]
 
