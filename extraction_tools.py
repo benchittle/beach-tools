@@ -117,13 +117,58 @@ def _identify_toe_poly_old(profile_xy):
     else:
         return x_coord
 
-
 def identify_toe_poly(xy_data, shore_x, crest_x, columns): 
     xy_data = xy_data.set_index(["state", "segment", "profile"])
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
     data = xy_data.dropna().groupby(["state", "segment", "profile"]).apply(_identify_toe_poly_old).rename("x")
+
+    return xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(data.reset_index())].reset_index()[columns]
+
+
+def _identify_toe_lcp_old(profile_xy):
+    """Returns the dune toe coordinates for the given profile."""
+    profile_xy.set_index("x", drop=False, inplace=True)
+    shore_x = profile_xy["shore_x"].iat[0]
+    crest_x = profile_xy["crest_x"].iat[0]
+    # Create a subset of the profile's data from the identified shore
+    # to the identified crest. The dune toe can only be found within
+    # this subset.
+    subset = profile_xy.loc[shore_x:crest_x]
+    # Distance values
+    x = subset["x"]
+    # Elevation values
+    y = subset["y"]
+
+    # Determines coefficients for the linear polynomial.
+    A, B = np.polyfit(x=[shore_x, crest_x], y=[y.min(), y.max()], deg=1)
+    # Subtract the elevation values by the polynomial.
+    differences = y - (A * x + B)
+
+    # Create a Truth Series for filtering the differences by certain conditions. 
+                # Toe must be more than 2 units away from crest.
+    filtered = ((crest_x - x > 2)
+                # Toe must be more than 5 units away from shore.
+                & (x - shore_x > 5))
+                
+    # Identifies the x value at the minimum cubic-elevation difference
+    # value. (This part is different compared to the other functions;
+    # however, additional conditions can still be added in the same
+    # way.)
+    x_coord = differences[filtered].idxmin()
+    if x_coord == shore_x or x_coord == crest_x:
+        return None
+    else:
+        return x_coord
+
+
+def identify_toe_lcp(xy_data, shore_x, crest_x, columns): 
+    xy_data = xy_data.set_index(["state", "segment", "profile"])
+    xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
+    xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
+
+    data = xy_data.dropna().groupby(["state", "segment", "profile"]).apply(_identify_toe_lcp_old).rename("x")
 
     return xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(data.reset_index())].reset_index()[columns]
 
@@ -198,7 +243,8 @@ MODES = {
     "rr" : {"shore":identify_shore_standard, "toe":identify_toe_rr, "crest":identify_crest_rr, "heel":identify_heel_rr},
     "rrfar" : {"shore":identify_shore_standard, "toe":identify_toe_rrfar, "crest":identify_crest_rr, "heel":identify_heel_rr},
     "ip" : {"shore":identify_shore_standard, "toe":identify_toe_ip, "crest":identify_crest_standard, "heel":identify_heel_standard},
-    "poly" : {"shore":identify_shore_standard, "toe":identify_toe_poly, "crest":identify_crest_standard, "heel":identify_heel_standard}
+    "poly" : {"shore":identify_shore_standard, "toe":identify_toe_poly, "crest":identify_crest_standard, "heel":identify_heel_standard},
+    "lcp" : {"shore":identify_shore_standard, "toe":identify_toe_lcp, "crest":identify_crest_standard, "heel":identify_heel_standard}
 }
 
 def find_closest_x(xy_data, x):
