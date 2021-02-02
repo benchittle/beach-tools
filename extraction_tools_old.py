@@ -244,13 +244,13 @@ def identify_crest_rr(profile_df, shore_x):
                 #
                 & (rr > 0.55)
                 #
-                & (y > y.shift(-15))
+                & (y > y.rolling(15).max().shift(-15))
                 #
                 #& (y > y.rolling(1).max().shift(-1))
                 #
-                & (rr > rr.shift(2))
+                & (rr > rr.rolling(2).max().shift(2))
                 #
-                & (rr > rr.shift(-2)))
+                & (rr > rr.rolling(2).max.shift(-2)))
         
     # The crest x coordinate is identified at the first position that satisfies
     # the filter.
@@ -275,7 +275,7 @@ def identify_crest_standard(profile_df, shore_x):
     # Create a Boolean mask for filtering the subset by certain conditions.
             # Current elevation is the largest so far
     mask = ((y > y.shift(1).expanding(min_periods=1).max()) 
-            # There is an elevation change of more than 2 in the next 20 values
+            # There is an elevation decrease of more than 2 in the next 20 values
             & (y - y.rolling(20).min().shift(-20) > 2) 
             # Current elevation is greater than the next 10 values.
             & (y > y.rolling(10).max().shift(-10))) 
@@ -346,7 +346,7 @@ def identify_heel_standard(profile_df, crest_x):
                 # There is an elevation change of more than 0.6 in the next 10 values.
     filtered = ~((y - y.rolling(10).min().shift(-10) > 0.6)
                 # Current elevation is greater than previous 10.
-                & (y > y.rolling(10).max())
+                & (y > y.rolling(10).max().shift(10)
                 # Current elevation is greater than next 10.
                 & (y > y.rolling(10).max().shift(-10)))
     # If no positions satistfied the filter, return None.
