@@ -1,10 +1,7 @@
 #-------------------------------------------------------------------------------
 # Name:        profile_plotter.py
-# Version:     Python 3.7, Pandas 0.24
-#
-# Purpose:     Plot profiles xy profile data.
-#
-# Authors:     Ben Chittle, Alex Smith
+# Version:     Python 3.9.1, pandas 1.2.0, numpy 1.19.3
+# Authors:     Ben Chittle
 #-------------------------------------------------------------------------------
 
 import os, re

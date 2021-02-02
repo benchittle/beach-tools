@@ -1,36 +1,37 @@
 #-------------------------------------------------------------------------------
-# Name:        beach-dune-formatter.py
-# Version:     Python 3.7, Pandas 0.24
-#
-# Purpose:     Processing beach profile data.
-#
-# Authors:     Ben Chittle, Alex Smith
+# Name:        beach_dune_formatter.py
+# Version:     Python 3.9.1, pandas 1.2.0, numpy 1.19.3
+# Authors:     Ben Chittle, Alex Smith, Libby George
 #-------------------------------------------------------------------------------
 
-"""
-3 parts:
-    A) input checking and formatting
-    B) data processing (create a library of functions)
-    C) output (formatting)
-"""
 import os, re, time
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
+import extraction_tools_old as extract
 
 
-BEN_IN = r"C:\Users\BenPc\Documents\GitHub\beach-dune-formatter\sample_data"
-BEN_OUT = r"C:\Users\BenPc\Documents\GitHub\beach-dune-formatter\out.xlsx"
+BEN_IN = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data"
+BEN_OUT = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data\out_old.xlsx"
 UNI_IN = r"E:\SA\Runs\Poly\tables"
 UNI_OUT =  r"E:\SA\Runs\Poly\tables\b_poly.xlsx"
-
-
 ####################### PATH SETTINGS #######################
 # Change these variables to modify the input and output paths
-# (type the path directly using the format above if needed).
+# (type the path directly using the format above if needed,
+# i.e. current_input = r"my\path").
 current_input = BEN_IN
 current_output = BEN_OUT
 #############################################################
+
+
+METHOD_RR = extract.MODES["rr"]
+METHOD_RR_FAR = extract.MODES["rrfar"]
+METHOD_IP = extract.MODES["ip"]
+METHOD_POLY = extract.MODES["poly"]
+METHOD_LCP = extract.MODES["lcp"]
+########################### MODE ################################
+# Change this variable to specify the extraction method.
+method = METHOD_LCP
+#################################################################
 
 
 def read_mask_csvs(path_to_dir):
@@ -42,14 +43,15 @@ def read_mask_csvs(path_to_dir):
     """
     # Default value since all testing data is from one state.
     STATE = np.uint8(29)
-    INPUT_COLUMNS = ["LINE_ID", "FIRST_DIST", "FIRST_Z"]
-    OUTPUT_COLUMNS = ["profile", "x", "y"]
-    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32]))
+    INPUT_COLUMNS = ["LINE_ID", "FIRST_DIST", "FIRST_Z", "FIRST_RR"]
+    OUTPUT_COLUMNS = ["profile", "x", "y", "rr"]
+    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32, np.float32]))
 
     if not path_to_dir.endswith("\\"):
         path_to_dir += "\\"
 
     # Read each .csv file into a DataFrame and append the DataFrame to a list.
+    # The list will be combined into one DataFrame at the end.
     csvs = []
     for file_name in os.listdir(path_to_dir):
         head, extension = os.path.splitext(file_name)
@@ -61,13 +63,15 @@ def read_mask_csvs(path_to_dir):
             if segment is not None:
                 segment = np.int16(segment.group())
 
-                # Read only the necessary columns and reorder them in the
-                # DataFrame.
+                # Read only the necessary columns (INPUT_COLUMNS) and specify
+                # data types for each (saves some memory for large amounts of
+                # data).
                 csv_data = pd.read_csv(path_to_dir + file_name,
                                        usecols=INPUT_COLUMNS,
                                        dtype=DTYPES)[INPUT_COLUMNS]
+                # Rename the columns.
                 csv_data.rename(columns=dict(zip(INPUT_COLUMNS, OUTPUT_COLUMNS)),
-                           inplace=True)
+                                inplace=True)
                 # Insert a column for the segment and state values.
                 csv_data.insert(loc=0, column="state", value=STATE)
                 csv_data.insert(loc=1, column="segment", value=segment)
@@ -80,125 +84,13 @@ def read_mask_csvs(path_to_dir):
         else:
             print("\tSkipping file '{}' (not a .csv)".format(file_name))
 
-    # Combine the .csvs into a single DataFrame and set the index to the x
-    # values column.
-    return pd.concat(csvs).set_index("x", drop=False)
-
-
-def identify_shore(profile_xy):
-    """Returns the x coordinate of the shoreline."""
-    x = profile_xy["x"]
-    y = profile_xy["y"]
-    slope = (y - y.shift(1)) / (x - x.shift(1))
-
-    filt = ((y > 0)
-            # Current y value is the largest so far
-            & (y > y.shift(1).expanding(min_periods=1).max())
-            # Current value and next 4 slope values are positive
-            & (slope.rolling(5).min().shift(-4) >= 0))
-
-    x_coord = filt.idxmax()
-    if x_coord == filt.index[0]:
-        return None
-    else:
-        return x_coord
-
-
-def identify_crest(profile_xy, shore_x):
-    """Returns the x coordinate of the dune crest."""
-    y = profile_xy.loc[shore_x:]["y"]
-            # Current y value is the largest so far
-    filt = ((y > y.shift(1).expanding(min_periods=1).max())
-            # Difference between current y value and minimum of next 20 > 0.6
-            & (y - y.rolling(20).min().shift(-20) > 0.6)
-            # Current y value > next 10
-            & (y > y.rolling(10).max().shift(-10)))
-
-    x_coord = filt.idxmax()
-    if x_coord == filt.index[0]:
-        return None
-    else:
-        return x_coord
-
-
-### COMPARE TO NEW
-def identify_toe_old(profile_xy, shore_x, crest_x):
-    """Returns the x coordinate of the dune toe."""
-    subset = profile_xy.loc[shore_x:crest_x].iloc[1:-2]
-    x = subset["x"]
-    y = subset["y"]
-
-    # Polynomial coefficients
-    A, B, C, D = np.polyfit(x=x, y=y, deg=3)
-    differences = y - ((A * x ** 3) + (B * x ** 2) + (C * x) + D)
-    x_coord = differences.idxmin()
-    return x_coord
-
-
-def identify_toe(profile_xy, shore_x, crest_x):
-    """Returns the x coordinate of the dune toe."""
-    subset = profile_xy.loc[shore_x:crest_x]
-    x = subset["x"]
-    y = subset["y"]
-
-    # Polynomial coefficients
-    A, B, C, D = np.polyfit(x=x, y=y, deg=3)
-    differences = y - ((A * x ** 3) + (B * x ** 2) + (C * x) + D)
-    x_coord = differences.idxmin()
-    return x_coord
-
-
-def identify_heel(profile_df, crest_x):
-    """Returns the x coordinate of the dune heel."""
-    subset = profile_df.loc[crest_x:]
-    y = subset["y"]
-             # Difference between current y value and minimum of next 10 > 0.6
-    filt = ~((y - y.rolling(10).min().shift(-10) > 0.6)
-             # Current y value > max of previous 10 y values
-             & (y > y.rolling(10).max())
-             & (y > y.rolling(20).max().shift(-20)))
-
-    x_coord = y[filt].idxmin()
-    if x_coord == filt.index[0]:
-        return None
-    else:
-        return x_coord
+    # Combine the .csvs into a single DataFrame.
+    return pd.concat(csvs)
 
 
 def grouped_mean(profiles, n):
     """Returns a new DataFrame with the mean of every n rows for each column."""
     return profiles.groupby(np.arange(len(profiles)) // n).mean()
-
-
-def identify_features(profile_xy):
-    """
-    Returns the coordinates of the shoreline, dune toe, dune crest, and
-    dune heel for a given profile as:
-    (shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y)
-    """
-    shore_x = identify_shore(profile_xy)
-    if shore_x is None:
-        print("\tNo shore for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
-        return None
-
-    crest_x = identify_crest(profile_xy, shore_x)
-    if crest_x is None:
-        print("\tNo crest for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
-        return None
-
-    toe_x = identify_toe(profile_xy, shore_x, crest_x)
-    if toe_x is None:
-        print("\tNo toe for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
-        return None
-
-    heel_x = identify_heel(profile_xy, crest_x)
-    if heel_x is None:
-        print("\tNo heel for {}".format(tuple(profile_xy.iloc[0]["state":"profile"])))
-        return None
-
-    shore_y, toe_y, crest_y, heel_y = profile_xy.loc[[shore_x, toe_x, crest_x, heel_x], "y"]
-
-    return shore_x, shore_y, toe_x, toe_y, crest_x, crest_y, heel_x, heel_y
 
 
 def measure_volume(profile_xy, start_x, end_x, profile_spacing, base_elevation=0):
@@ -218,7 +110,7 @@ def measure_volume(profile_xy, start_x, end_x, profile_spacing, base_elevation=0
       Set the height of the horizontal axis to measure volume from. Change this
       if y values are relative to an elevation other than y=0.
     """
-    subset = profile_xy.loc[start_x:end_x]
+    subset = profile_xy.set_index("x", drop=False).loc[start_x:end_x]
     x = subset["x"]
     y = subset["y"]
 
@@ -289,7 +181,7 @@ def write_data_excel(path_to_file, dataframes, names):
 
 ### HAVE THE USER DECLARE HOW THEIR DATA IS CATEGORIZED / ORGANIZED
 ### (need to know for groupby operations)
-def main(input_path, output_path):
+def main(input_path, output_path, feature_id_method):
     FEATURE_COLUMNS = ["shore_x",  "shore_y", "toe_x", "toe_y", "crest_x",
                        "crest_y", "heel_x", "heel_y"]
 
@@ -310,7 +202,7 @@ def main(input_path, output_path):
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data. This data will be returned as a Pandas Series
     # containing tuples of the 4 pairs of coordinates for each profile.
-    profiles = xy_data.groupby(["state", "segment", "profile"]).apply(identify_features)
+    profiles = xy_data.groupby(["state", "segment", "profile"]).apply(extract.identify_features(method))
 
     # Expand the Series of tuples into a DataFrame where each column contains an
     # x or y componenent of a feature.
@@ -398,6 +290,7 @@ def main(input_path, output_path):
                                  corr2, averaged_beach_data),
                      names=("profiles", "unfiltered", "corr_1", "filtered",
                             "corr_2", "averages"))
+    print("\tDone writing to {}".format(output_path))
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
 
     print("\nTotal time: {:.2f} seconds".format(time.perf_counter() - initial_start_time))
@@ -407,5 +300,5 @@ def main(input_path, output_path):
 
 if __name__ == "__main__":
     #xy_data, profiles, beach_data, filtered_beach_data, avg = main(current_input, current_output)
-    main(current_input, current_output)
+    main(current_input, current_output, method)
 
