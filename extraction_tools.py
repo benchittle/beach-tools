@@ -333,17 +333,34 @@ MODES = {
     "lcp" : {"shore":identify_shore_standard, "toe":identify_toe_lcp, "crest":identify_crest_standard, "heel":identify_heel_standard}
 }
 
-def find_closest_x(xy_data, x):
-    # x must have index of date state seg profile
+### new_x must have index of date state seg profile
+def find_closest_x(xy_data, old_x, threshold=1):
+    """
+    For each profile, find the closest x position in xy_data to the 
+    x position in old_x. Positions closer than the specified threshold
+    are returned in the new xy_data.
+
+    ARGUMENTS:
+    old_x: Series
+      Single x value for each profile.
+    threshold: float
+      Maximum distance between old_x x value and the closest one in xy_data.
+    """
+
     xy_data = xy_data.set_index(["state", "segment", "profile"])
-    xy_data["dist"] = (xy_data["x"] - x.reset_index("date", drop=True).reindex_like(xy_data)).abs()
+
+    # Insert a column for the distance between old x values and new x values.
+    xy_data["dist"] = (xy_data["x"] - old_x.reset_index("date", drop=True).reindex_like(xy_data)).abs()
     xy_data.set_index("x", append=True, drop=False, inplace=True)
-    new = xy_data.loc[xy_data.groupby(["state", "segment", "profile"])["dist"].idxmin().dropna()]
-    new = new[new["dist"] < 1]
-    new.drop(columns="dist", inplace=True)
-    new.reset_index("x", drop=True, inplace=True)
-    new.reset_index(inplace=True)
-    return new
+    # Create a new DataFrame for the closest x values in xy_data to those in old_x.
+    new_xy = xy_data.loc[xy_data.groupby(["state", "segment", "profile"])["dist"].idxmin().dropna()]
+    # Filter out x values that exceeded the distance threshold.
+    new_xy = new_xy[new_xy["dist"] < threshold]
+
+    new_xy.drop(columns="dist", inplace=True)
+    new_xy.reset_index("x", drop=True, inplace=True)
+    new_xy.reset_index(inplace=True)
+    return new_xy
 
 
 def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
