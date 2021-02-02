@@ -141,7 +141,7 @@ def _identify_toe_poly_old(profile_xy):
     # Create a Truth Series for filtering the differences by certain conditions. 
                 # Toe must be more than 5m from crest.
     filtered = ((crest_x - x > 5)
-                # Toe must be at least 10 meters away from the crest. 10m has been specified for Libbys Site at Brackley Beach.
+                # Toe must be at least 40 meters away from the crest. 10m has been specified for Libbys Site at Brackley Beach.
                 & (x > 40))
     # The toe x coordinate is identified as the x coordinate corresponding to
     # the minimum value in the above differences series after being filtered.
@@ -164,7 +164,7 @@ def identify_toe_poly(xy_data, shore_x, crest_x, columns):
     # DataFrame.
     toes = xy_data.dropna().groupby(["state", "segment", "profile"]).apply(_identify_toe_poly_old).rename("x")
     # Extract the rows corresponding to each identified toe in the original data.
-    toes = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toe_x.reset_index())]
+    toes = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toes.reset_index())]
 
     # Return the data for the selected columns.
     return toes.reset_index()[columns]
@@ -227,7 +227,7 @@ def identify_toe_lcp(xy_data, shore_x, crest_x, columns):
 
 def identify_crest_rr(xy_data, shore_x, columns):
     xy_data = xy_data.set_index(["state", "segment", "profile"])
-    # Insert columns for the crest values for each profile in xy_data.
+    # Insert column for the shore values for each profile in xy_data.
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
@@ -240,26 +240,35 @@ def identify_crest_rr(xy_data, shore_x, columns):
         & (xy_data["x"] < 85)
         # Minimum relative relief of more than 0.55.
         & (xy_data["rr"] > 0.55)
-#############################################################
-#############################################################
-        & (xy_data["y"] > grouped["y"].shift(-15)) 
-#############################################################
-#############################################################
-        & (xy_data["rr"] > grouped["rr"].shift(2))
-        & (xy_data["rr"] > grouped["rr"].shift(-2))
+        # Current elevation is greater than next 10.
+        & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10)) 
+        # Curent relative relief is greater than previous 2.
+        & (xy_data["rr"] > grouped["rr"].rolling(2).max().groupby(["state", "segment", "profile"]).shift(1))
+        # Current relative relief is greater than next 2.
+        & (xy_data["rr"] > grouped["rr"].rolling(2).max().groupby(["state", "segment", "profile"]).shift(-2))
+    # Extract the first position that satisfied the above conditions from each
+    # profile, if any exist, and return the data for the selected columns.
     ].groupby(["state", "segment", "profile"]).head(1).reset_index()[columns]
 
 
 def identify_crest_standard(xy_data, shore_x, columns):
     xy_data = xy_data.set_index(["state", "segment", "profile"])
+    # Insert column for the shore values for each profile in xy_data.
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
+    # Filtering the data:
     return xy_data[
+        # Crest must be past shore.
         (xy_data["x"] > xy_data["shore_x"])
+        # Curent elevation is the largest so far.
         & (xy_data["y"] > grouped["y"].shift(1).groupby(["state", "segment", "profile"]).expanding(min_periods=1).max())
+        # There is an elevation decrease of more than 2 in the next 20 values.
         & (xy_data["y"] - grouped["y"].rolling(20).min().groupby(["state", "segment", "profile"]).shift(-20) > 2)
+        # Current elevation is greater than next 10.
         & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10))
+    # Extract the first position that satisfied the above conditions from each
+    # profile, if any exist, and return the data for the selected columns.
     ].groupby(["state", "segment", "profile"]).head(1).reset_index()[columns]
 
 
@@ -268,35 +277,54 @@ def identify_crest_standard(xy_data, shore_x, columns):
 
 def identify_heel_rr(xy_data, crest_x, columns):
     xy_data = xy_data.set_index(["state", "segment", "profile"])
+    # Insert column for the crest values for each profile in xy_data.
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
+    # Include x values in the index so exact rows can be extracted later.
     xy_data.set_index("x", drop=False, append=True, inplace=True)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
-
+    # Filtering the data:
     return xy_data.loc[xy_data[
+        # Heel must be more than 5 units past the crest.
         (xy_data["x"] > xy_data["crest_x"] + 5)
-        & (grouped["rr"].shift(2) > 0.4)
-        & (grouped["rr"].shift(-2) < 0.4)
+        # Previous 2 relative relief values are greater than 0.4.
+        & (grouped["rr"].rolling(2).min().groupby(["state", "segment", "profile"]).shift(1) > 0.4)
+        # Next 2 relative relief values are less than 0.4.
+        & (grouped["rr"].rolling(2).max().groupby(["state", "segment", "profile"]).shift(-2) < 0.4)
+    # Return the row with the minimum y value for each profile after filtering,
+    # for the selected columns.
     ].groupby(["state", "segment", "profile"])["y"].idxmin()].reset_index("x", drop=True).reset_index()[columns]
 
 
 def identify_heel_standard(xy_data, crest_x, columns):
     xy_data = xy_data.set_index(["state", "segment", "profile"])
+    # Insert column for the crest values for each profile in xy_data.
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
-
+    # Creating a mask to filter the data:
+            # Heel must be past crest.
     mask = ((xy_data["x"] > xy_data["crest_x"])
-        &  ((xy_data["y"] - grouped["y"].rolling(10).min().groupby(["state", "segment", "profile"]).shift(-10) <= 0.6)
-            | (xy_data["y"] <= grouped["y"].rolling(10).max())
-            | (xy_data["y"] <= grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10))))
+        # The following conditions specify the data to be filtered OUT when satisfied:
+        # ('~' inverts the conditions)
+            # There is a decrease in elevation of more than 0.6 in the next 10 values.
+        &  ~((xy_data["y"] - grouped["y"].rolling(10).min().groupby(["state", "segment", "profile"]).shift(-10) > 0.6)
+            # Current elevation is greater than previous 10. 
+            & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(1))
+            # Current elevation is greater than next 10.
+            & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10))))
 
+    # Manipulate the indexes after creating the mask to get around issues with 
+    # how groupby changes the index.
     xy_data.set_index("x", drop=False, append=True, inplace=True)
     mask.index = xy_data.index
+    # Apply the mask to the data and return the row with the minimum y value 
+    # for each profile after filtering, for the selected columns.
     return xy_data.loc[xy_data[mask].groupby(["state", "segment", "profile"])["y"].idxmin()].reset_index("x", drop=True).reset_index()[columns]
 
 
 ############################# PROFILE EXTRACTION ##############################
+# Default extraction modes.
 MODES = {
     "rr" : {"shore":identify_shore_standard, "toe":identify_toe_rr, "crest":identify_crest_rr, "heel":identify_heel_rr},
     "rrfar" : {"shore":identify_shore_standard, "toe":identify_toe_rrfar, "crest":identify_crest_rr, "heel":identify_heel_rr},
