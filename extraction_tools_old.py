@@ -248,7 +248,7 @@ def identify_crest_rr(profile_df, shore_x):
                 #
                 #& (y > y.rolling(1).max().shift(-1))
                 #
-                & (rr > rr.rolling(2).max().shift(2))
+                & (rr > rr.rolling(2).max().shift(1))
                 #
                 & (rr > rr.rolling(2).max.shift(-2)))
         
@@ -315,10 +315,10 @@ def identify_heel_rr(profile_df, crest_x):
     # data to exclude, rather than what data to include as seen previously.
                 # Horizontal position is 5m past the crest position
     filtered =  ((x - crest_x > 5)
-                # RR 2m previous is greater than 0.4
-                & (rr.shift(2) > 0.4)
-                # RR 2m in advance is less than 0.4
-                & (rr.shift(-2) < 0.4))
+                # Previous 2 relative relief values greater than 0.4.
+                & (rr.rolling(2).min().shift(1) > 0.4)
+                # Next 2 relative relief values less than 0.4.
+                & (rr.rolling(2).max().shift(-2) < 0.4))
                 # Add x and y filter criteria as needed
             
     # If no positions satistfied the filter, return None.
@@ -346,7 +346,7 @@ def identify_heel_standard(profile_df, crest_x):
                 # There is an elevation change of more than 0.6 in the next 10 values.
     filtered = ~((y - y.rolling(10).min().shift(-10) > 0.6)
                 # Current elevation is greater than previous 10.
-                & (y > y.rolling(10).max().shift(10)
+                & (y > y.rolling(10).max().shift(1))
                 # Current elevation is greater than next 10.
                 & (y > y.rolling(10).max().shift(-10)))
     # If no positions satistfied the filter, return None.
