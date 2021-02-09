@@ -7,6 +7,41 @@ import pandas as pd
 import numpy as np
 
 
+class ForwardIndexer(pd.api.indexers.BaseIndexer):
+    def get_window_bounds(self, num_values: int = 0, min_periods = None, center = None, closed = None):
+        if center:
+            raise ValueError("Centering not supported")
+        if closed is not None:
+            raise ValueError("Closed ends not supported")
+        
+        offset = self.window_size
+
+        end = np.arange(1 + offset, num_values + 1 + offset, dtype="int64")
+        start = end - self.window_size
+
+        end = np.clip(end, 0, num_values)
+        start = np.clip(start, 0, num_values)
+
+        return start, end
+
+class BackwardIndexer(pd.api.indexers.BaseIndexer):
+    def get_window_bounds(self, num_values: int = 0, min_periods = None, center = None, closed = None):
+        if center:
+            raise ValueError("Centering not supported")
+        if closed is not None:
+            raise ValueError("Closed ends not supported")
+        
+        offset = -1
+
+        end = np.arange(1 + offset, num_values + 1 + offset, dtype="int64")
+        start = end - self.window_size
+
+        end = np.clip(end, 0, num_values)
+        start = np.clip(start, 0, num_values)
+
+        return start, end
+
+
 ############################### SHORE FUNCTIONS ###############################
 
 
@@ -235,11 +270,11 @@ def identify_crest_rr(xy_data, shore_x, columns):
         # Minimum relative relief of more than 0.55.
         & (xy_data["rr"] > 0.55)
         # Current elevation is greater than next 10.
-        & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10)) 
+        & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max()) 
         # Curent relative relief is greater than previous 2.
-        & (xy_data["rr"] > grouped["rr"].rolling(2).max().groupby(["state", "segment", "profile"]).shift(1))
+        & (xy_data["rr"] > grouped["rr"].rolling(BackwardIndexer(window_size=2)).max())
         # Current relative relief is greater than next 2.
-        & (xy_data["rr"] > grouped["rr"].rolling(2).max().groupby(["state", "segment", "profile"]).shift(-2))
+        & (xy_data["rr"] > grouped["rr"].rolling(ForwardIndexer(window_size=2)).max())
     # Extract the first position that satisfied the above conditions from each
     # profile, if any exist, and return the data for the selected columns.
     ].groupby(["state", "segment", "profile"]).head(1).reset_index()[columns]
@@ -259,9 +294,9 @@ def identify_crest_standard(xy_data, shore_x, columns):
         # Curent elevation is the largest so far.
         & (xy_data["y"] > grouped["y"].shift(1).groupby(["state", "segment", "profile"]).expanding(min_periods=1).max())
         # There is an elevation decrease of more than 2 in the next 20 values.
-        & (xy_data["y"] - grouped["y"].rolling(20).min().groupby(["state", "segment", "profile"]).shift(-20) > 2)
+        & (xy_data["y"] - grouped["y"].rolling(ForwardIndexer(window_size=20)).min() > 2)
         # Current elevation is greater than next 10.
-        & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10))
+        & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max())
     # Extract the first position that satisfied the above conditions from each
     # profile, if any exist, and return the data for the selected columns.
     ].groupby(["state", "segment", "profile"]).head(1).reset_index()[columns]
@@ -282,9 +317,9 @@ def identify_heel_rr(xy_data, crest_x, columns):
         # Heel must be more than 5 units past the crest.
     mask = ((xy_data["x"] > xy_data["crest_x"] + 5)
         # Previous 2 relative relief values are greater than 0.4.
-        & (grouped["rr"].rolling(2).min().groupby(["state", "segment", "profile"]).shift(1) > 0.4)
+        & (grouped["rr"].rolling(BackwardIndexer(window_size=2)).min() > 0.4)
         # Next 2 relative relief values are less than 0.4.
-        & (grouped["rr"].rolling(2).max().groupby(["state", "segment", "profile"]).shift(-2) < 0.4))
+        & (grouped["rr"].rolling(ForwardIndexer(window_size=2)).max() < 0.4))
     
     # Append the x values to the index for looking up specific points on each profile.
     xy_data.set_index("x", drop=False, append=True, inplace=True)
@@ -308,11 +343,11 @@ def identify_heel_standard(xy_data, crest_x, columns):
         # The following conditions specify the data to be filtered OUT when satisfied:
         # ('~' inverts the conditions)
             # There is a decrease in elevation of more than 0.6 in the next 10 values.
-        &  ~((xy_data["y"] - grouped["y"].rolling(10).min().groupby(["state", "segment", "profile"]).shift(-10) > 0.6)
+        &  ~((xy_data["y"] - grouped["y"].rolling(ForwardIndexer(window_size=10)).min() > 0.6)
             # Current elevation is greater than previous 10. 
-            & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(1))
+            & (xy_data["y"] > grouped["y"].rolling(BackwardIndexer(window_size=10)).max())
             # Current elevation is greater than next 10.
-            & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10))))
+            & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max())))
 
     # Append the x values to the index for looking up specific points on each profile.
     xy_data.set_index("x", drop=False, append=True, inplace=True)
