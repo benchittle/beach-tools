@@ -251,6 +251,7 @@ def identify_crest_standard(xy_data, shore_x, columns):
     xy_data["shore_x"] = shore_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
+    
     # Filtering the data:
     return xy_data[
         # Crest must be past shore.
@@ -390,10 +391,15 @@ def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=
 
 
 def measure_volume(xy_data, start_values, end_values, base_elevations):
-    print(xy_data)
-    print(start_values)
-    print(end_values)
-    print(base_elevations)
+    xy_data = xy_data.set_index(["date", "state", "segment", "profile"])
+    start_values = start_values.reindex(xy_data.index)
+    end_values = end_values.reindex(xy_data.index)
+    base_elevations = base_elevations.reindex(xy_data.index)
+    xy_data.loc[:, "y"] -= base_elevations
+    new_data = xy_data[(xy_data["x"] >= start_values) & (xy_data["x"] <= end_values)]
+    print(new_data.groupby(["date", "state", "segment", "profile"]).apply(lambda df: np.trapz(x=df["x"], y=df["y"])))
+    
+    
 
 
-    xy_data["starts"] = start_values.reindex_like
+    
