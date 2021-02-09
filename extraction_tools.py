@@ -13,13 +13,7 @@ import numpy as np
 def identify_shore_standard(xy_data, columns):
     grouped = xy_data.groupby(["state", "segment", "profile"])
     # Determine the slope of consecutive points over the data.
-    #slope = xy_data["y"].diff(-1) / xy_data["x"].diff(-1)
     slope = grouped["y"].diff(1) / grouped["x"].diff(1)
-    # Replace the last slope value for each profile with NaN (since this point
-    # wouldn't have a slope value in reality, but because the data is stacked
-    # together, it would use the first row in the next profile during the
-    # above calculation).
-    #slope.loc[xy_data["profile"] != xy_data["profile"].shift(-1)] = None
 
     # Filtering the data:
     return xy_data[
@@ -280,20 +274,25 @@ def identify_heel_rr(xy_data, crest_x, columns):
     # Insert column for the crest values for each profile in xy_data.
     xy_data["crest_x"] = crest_x.set_index(["state", "segment", "profile"])["x"].reindex_like(xy_data)
     # Include x values in the index so exact rows can be extracted later.
-    xy_data.set_index("x", drop=False, append=True, inplace=True)
+    #xy_data.set_index("x", drop=False, append=True, inplace=True)
 
     grouped = xy_data.groupby(["state", "segment", "profile"])
-    # Filtering the data:
-    return xy_data.loc[xy_data[
+    # Creating a mask to filter the data.
         # Heel must be more than 5 units past the crest.
-        (xy_data["x"] > xy_data["crest_x"] + 5)
+    mask = ((xy_data["x"] > xy_data["crest_x"] + 5)
         # Previous 2 relative relief values are greater than 0.4.
         & (grouped["rr"].rolling(2).min().groupby(["state", "segment", "profile"]).shift(1) > 0.4)
         # Next 2 relative relief values are less than 0.4.
-        & (grouped["rr"].rolling(2).max().groupby(["state", "segment", "profile"]).shift(-2) < 0.4)
-    # Return the row with the minimum y value for each profile after filtering,
-    # for the selected columns.
-    ].groupby(["state", "segment", "profile"])["y"].idxmin()].reset_index("x", drop=True).reset_index()[columns]
+        & (grouped["rr"].rolling(2).max().groupby(["state", "segment", "profile"]).shift(-2) < 0.4))
+    
+    # Append the x values to the index for looking up specific points on each profile.
+    xy_data.set_index("x", drop=False, append=True, inplace=True)
+    mask.index = xy_data.index
+
+    # Apply the mask to the data and return the row with the minimum y value 
+    # for each profile after filtering, for the selected columns.
+    return (xy_data.loc[xy_data[mask].groupby(["state", "segment", "profile"])["y"].idxmin()]
+        .reset_index("x", drop=True).reset_index()[columns])
 
 
 def identify_heel_standard(xy_data, crest_x, columns):
@@ -314,13 +313,13 @@ def identify_heel_standard(xy_data, crest_x, columns):
             # Current elevation is greater than next 10.
             & (xy_data["y"] > grouped["y"].rolling(10).max().groupby(["state", "segment", "profile"]).shift(-10))))
 
-    # Manipulate the indexes after creating the mask to get around issues with 
-    # how groupby changes the index.
+    # Append the x values to the index for looking up specific points on each profile.
     xy_data.set_index("x", drop=False, append=True, inplace=True)
     mask.index = xy_data.index
     # Apply the mask to the data and return the row with the minimum y value 
     # for each profile after filtering, for the selected columns.
-    return xy_data.loc[xy_data[mask].groupby(["state", "segment", "profile"])["y"].idxmin()].reset_index("x", drop=True).reset_index()[columns]
+    return (xy_data.loc[xy_data[mask].groupby(["state", "segment", "profile"])["y"].idxmin()]
+        .reset_index("x", drop=True).reset_index()[columns])
 
 
 ############################# PROFILE EXTRACTION ##############################
@@ -388,3 +387,13 @@ def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=
         data.rename(columns={"x" : name + "_x", "y" : name + "_y", "rr" : name + "_rr"}, inplace=True)
 
     return pd.concat([shore, toe, crest, heel], axis=1)
+
+
+def measure_volume(xy_data, start_values, end_values, base_elevations):
+    print(xy_data)
+    print(start_values)
+    print(end_values)
+    print(base_elevations)
+
+
+    xy_data["starts"] = start_values.reindex_like

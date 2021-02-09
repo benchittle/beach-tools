@@ -30,7 +30,7 @@ MODE_POLY = extract.MODES["poly"]
 MODE_LCP = extract.MODES["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction technique.
-mode = MODE_LCP
+mode = MODE_RR
 #################################################################
 
 
