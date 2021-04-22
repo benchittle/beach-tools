@@ -48,10 +48,10 @@ class BackwardIndexer(pd.api.indexers.BaseIndexer):
 def identify_shore_standard(xy_data, columns):
     grouped = xy_data.groupby(xy_data.index.names)
     # Determine the slope of consecutive points over the data.
-    slope = grouped["y"].diff(1) / grouped["x"].diff(1)
+    slope = (xy_data["y"] - grouped["y"].shift(1)) / (xy_data["x"] - grouped["x"].shift(1))
 
     # Filtering the data:
-    return xy_data[
+    return xy_data[columns][xy_data["x"] == xy_data["x"].where(
         # Minimum distance of 10.
         (xy_data["x"] > 10)
         # Minimum elevation of more than 0.75.
@@ -59,10 +59,9 @@ def identify_shore_standard(xy_data, columns):
         # Maximum elevation of less than 0.85.
         & (xy_data["y"] < 0.85)
         # Positive or 0 slope in the next 2 values.
-        & (slope.rolling(2).min().shift(-2) >= 0)
-    # Extract the first position that satisfied the above conditions from each
-    # profile, if any exist, and return the data for the selected columns.
-    ].groupby(xy_data.index.names).head(1)[columns]
+        & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
+        ).groupby(xy_data.index.names).transform("min")]
+
     
     '''xy_data.query(
         "(x > 10)"
@@ -73,6 +72,8 @@ def identify_shore_standard(xy_data, columns):
 
 ################################ TOE FUNCTIONS ################################
 
+
+### USE .between(left, right, inclusive=False)
 
 def identify_toe_rr(xy_data, shore_x, crest_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
@@ -124,12 +125,15 @@ def identify_toe_ip(xy_data, shore_x, crest_x, columns):
         # Maximum distance of less than 63.
         & (xy_data["x"] < 63)
         # Maximum elevation of less than 3.2.
-        & xy_data["y"] < 3.2]
-    
+        & (xy_data["y"] < 3.2)]
     grouped = filtered_xy.groupby(filtered_xy.index.names)
 
-    # Calculate the change in slope between each point for each profile.
-    slope_change = (grouped["y"].diff(-1) / grouped["x"].diff(-1)).groupby(filtered_xy.index.names).diff(-1)
+    # Calculate the change in slope between each point for each profile:
+    # First calculate the slope.
+    slope_change = ((filtered_xy["y"] - grouped["y"].shift(1)) 
+                    / (filtered_xy["x"] - grouped["x"].shift(1)))
+    # Then calculate the change in slope for each value.
+    slope_change = slope_change - slope_change.groupby(slope_change.index.names).shift(1)
 
     # Identify the toe as the point with the greatest change in slope for each
     # profile and return the data for the selected columns.
@@ -185,7 +189,7 @@ def identify_toe_poly(xy_data, shore_x, crest_x, columns):
     toes = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toes.reset_index())]
 
     # Return the data for the selected columns.
-    return toes[columns]
+    return toes.reset_index("x")[columns]
 
 
 def _identify_toe_lcp_old(profile_xy):
@@ -246,9 +250,9 @@ def identify_crest_rr(xy_data, shore_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
 
     # Filtering the data:
-    return xy_data[
+    return xy_data[columns].where(
         # Crest must be past shore.
-        (xy_data["x"] > shore_x["x"].reindex(xy_data.index))
+        (xy_data["x"] > shore_x)
         # Minimum distance of more than 30.
         & (xy_data["x"] > 30)
         # Maximum distance of less than 85.
@@ -263,7 +267,7 @@ def identify_crest_rr(xy_data, shore_x, columns):
         & (xy_data["rr"] > grouped["rr"].rolling(ForwardIndexer(window_size=2)).max())
     # Extract the first position that satisfied the above conditions from each
     # profile, if any exist, and return the data for the selected columns.
-    ].groupby(xy_data.index.names).head(1)[columns]
+    ).groupby(xy_data.index.names).transform("max")
 
 
 def identify_crest_standard(xy_data, shore_x, columns):

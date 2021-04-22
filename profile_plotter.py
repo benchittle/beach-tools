@@ -9,8 +9,8 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-BEN_IN = r"C:\Users\BenPc\Documents\GitHub\beach-dune-formatter\sample_data"
-BEN_OUT = r"C:\Users\BenPc\Documents\GitHub\beach-dune-formatter\out.xlsx"
+BEN_IN = r"C:\Users\Ben2020\Documents\sample_bdf_data\libby_test"
+BEN_OUT = r"C:\Users\Ben2020\Documents\sample_bdf_data\libby_test\out.xlsx"
 UNI_IN = r"E:\SA\Runs\Poly\tables"
 UNI_OUT =  r"E:\SA\Runs\Poly\tables\b_poly.xlsx"
 

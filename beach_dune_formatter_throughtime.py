@@ -10,10 +10,10 @@ import numpy as np
 import extraction_tools as extract
 
 
+LIBBY_IN = r"C:\Users\libby\Documents\GIS\GIS_DataBase\PEI\Profiles\Processing\tables"
+LIBBY_OUT = r"C:\Users\libby\Documents\GIS\GIS_DataBase\PEI\Profiles\Processing\tables\throughtime_RRfar_feature.xlsx"
 BEN_IN = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data"
 BEN_OUT = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data\out_time.xlsx"
-UNI_IN = r"E:\SA\Runs\Poly\tables"
-UNI_OUT =  r"E:\SA\Runs\Poly\tables\b_poly.xlsx"
 ####################### PATH SETTINGS #######################
 # Change these variables to modify the input and output paths
 # (type the path directly using the format above if needed,
@@ -30,7 +30,7 @@ MODE_POLY = extract.MODES["poly"]
 MODE_LCP = extract.MODES["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction technique.
-mode = MODE_RR
+mode = MODE_IP
 #################################################################
 
 
@@ -200,9 +200,9 @@ def main(input_path, output_path, mode):
     # Boolean mask for first time snap.
     first_timesnap_filter = xy_data["date"] == xy_data["date"].iat[0]
     # Get the data for the first time snap.
-    first_xy = xy_data[first_timesnap_filter]
+    first_xy = xy_data[first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
     # Get the data for the remaining time snap.
-    remaining_xy = xy_data[~first_timesnap_filter]   
+    remaining_xy = xy_data[~first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
@@ -210,11 +210,18 @@ def main(input_path, output_path, mode):
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the remaining points in time. 
-    remaining_profiles = remaining_xy.groupby("date", group_keys=False
-        ).apply(lambda df: extract.identify_features(mode, df, use_toex=first_profiles["toe_x"]))
+    remaining_profiles = remaining_xy.groupby("date", group_keys=False, as_index=False,
+        ).apply(lambda df: extract.identify_features(mode, df ))#, use_toex=first_profiles["toe_x"]))
 
     # Combine all the profile data back into a single DataFrame.
     profiles = pd.concat([first_profiles, remaining_profiles])
+
+    '''extract.measure_volume(
+        xy_data,
+        start_values=profiles["shore_x"],
+        end_values=profiles["toe_x"],
+        base_elevations=profiles["shore_y"])
+    quit()'''
 
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
 
@@ -290,7 +297,6 @@ def main(input_path, output_path, mode):
     corr1 = beach_data.corr(method="pearson")
     corr2 = filtered_beach_data.corr(method="pearson")
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
-
 
     print("\nWriting to file...")
     start_time = time.perf_counter()
