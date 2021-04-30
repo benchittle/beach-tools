@@ -409,4 +409,5 @@ def measure_volume(xy_data, start_values, end_values, base_elevations):
     
 
 
-    
+s = pd.Series([1,2,3,4])
+print(s.shift(1))
