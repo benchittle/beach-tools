@@ -21,13 +21,12 @@ shape_file = gpd.read_file(r'C:\Users\Ben2020\Downloads\shore\shore.shp')
 geom = [i for i in shape_file.geometry]
 
 ###############
-# shape_file.geometry is GeoPandas GeoSeries (like a List but better!).
-print("shape_file type:", type(shape_file.geometry))
+# The shape_file.geometry variable is a GeoPandas GeoSeries (like a List but better).
 # Since it's built on top of regular Pandas, anything you could do to a Pandas 
 # Series can also be done to a GeoPandas GeoSeries
-# It looks like its entries are LINESTRINGS from the provided shapefile:
+# Its entries are LineString values here (from the shapefile):
 print("\nFirst (and only) entry in the shape_file.geometry GeoSeries:", shape_file.geometry.iat[0])
-# In fact it looks like the first and only entry in this series is the LINESTRING
+# It looks like the first and only entry in this series is the LINESTRING
 # you're trying to create below :)
 ###############
 
@@ -46,8 +45,8 @@ shore_line = shape_file.geometry.iat[0]
 distance_delta = 100
 
 ###############
-# The builtin range function could save memory here for larger ranges:
-#distances = range(0, int(shore_line.length), distance_delta)
+# The builtin range function could save memory here for larger ranges (unless you need fractional values):
+distances = range(0, int(shore_line.length), distance_delta)
 ###############
 distances = np.arange(0, shore_line.length, distance_delta)
 
@@ -89,6 +88,8 @@ plt.show()
 
 
 ###############
+# Generating LineStrings for each transect:
+
 # Function to generate the LineString for a given transect / row in the dataframe (see below first)
 def get_transect(xy_row):
     if xy_row.hasnans:
@@ -113,8 +114,7 @@ rad90 = math.radians(90)
 
 # xy_data["y"].shift(-1) will shift the rows of the column up 1 position, this
 # way the first row contains values for the second transect, the second row
-# contains values for the third transect, etc in order to get the angle between
-# 3 consecutive transects.
+# contains values for the third transect, etc.
 xy_data["angles"] = rad90 - np.arctan2(xy_data["y"].shift(-1) - xy_data["y"].shift(1), xy_data["x"].shift(-1) - xy_data["x"].shift(1))
 
 # Calculate your x1 and x2 values for each row / transect
