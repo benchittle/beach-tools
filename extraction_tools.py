@@ -405,9 +405,3 @@ def measure_volume(xy_data, start_values, end_values, base_elevations):
     xy_data.loc[:, "y"] -= base_elevations
     new_data = xy_data[(xy_data["x"] >= start_values) & (xy_data["x"] <= end_values)]
     print(new_data.groupby(["date", "state", "segment", "profile"]).apply(lambda df: np.trapz(x=df["x"], y=df["y"])))
-    
-    
-
-
-s = pd.Series([1,2,3,4])
-print(s.shift(1))
