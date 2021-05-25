@@ -51,7 +51,7 @@ def identify_shore_standard(xy_data, columns):
     slope = (xy_data["y"] - grouped["y"].shift(1)) / (xy_data["x"] - grouped["x"].shift(1))
 
     # Filtering the data:
-    return xy_data[columns][xy_data["x"] == xy_data["x"].where(
+    return xy_data[columns].where(
         # Minimum distance of 10.
         (xy_data["x"] > 10)
         # Minimum elevation of more than 0.75.
@@ -60,7 +60,9 @@ def identify_shore_standard(xy_data, columns):
         & (xy_data["y"] < 0.85)
         # Positive or 0 slope in the next 2 values.
         & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
-        ).groupby(xy_data.index.names).transform("min")]
+        ).groupby(xy_data.index.names).transform("min")
+    #print(df)
+    #quit()
 
     
     '''xy_data.query(
@@ -78,11 +80,11 @@ def identify_shore_standard(xy_data, columns):
 def identify_toe_rr(xy_data, shore_x, crest_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
     # Filtering the data:
-    return xy_data[
+    return xy_data[columns].where(
         # Toe must be past shore.
-        (xy_data["x"] > shore_x["x"].reindex(xy_data.index))
+        (xy_data["x"] > shore_x)
         # Toe must be more than 3 units before crest.
-        & (xy_data["x"] < crest_x["x"].reindex(xy_data.index) - 3)
+        & (xy_data["x"] < crest_x - 3)
         # Maximum relative relief of 0.25.
         & (xy_data["rr"] <= 0.25)
         # Previous relative relief less than 0.25.
@@ -93,7 +95,7 @@ def identify_toe_rr(xy_data, shore_x, crest_x, columns):
         & (xy_data["x"] > 50)
     # Extract the first position that satisfied the above conditions from each
     # profile, if any exist, and return the data for the selected columns.
-    ].groupby(xy_data.index.names).head(1)[columns]
+    ).groupby(xy_data.index.names).transform("min")
 
 
 def identify_toe_rrfar(xy_data, shore_x, crest_x, columns):
@@ -355,7 +357,7 @@ def find_closest_x(xy_data, old_x, threshold=1):
       Maximum distance between old_x x value and the closest one in xy_data.
     """
 
-    xy_data = xy_data.set_index(["state", "segment", "profile"])
+    #xy_data = xy_data.set_index(["state", "segment", "profile"])
 
     # Insert a column for the distance between old x values and new x values.
     xy_data["dist"] = (xy_data["x"] - old_x.reset_index("date", drop=True).reindex_like(xy_data)).abs()
@@ -378,16 +380,19 @@ def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=
         shore = mode["shore"](xy_data, columns=columns)
     else:
         shore = find_closest_x(xy_data, use_shorex)
+
     if use_crestx is None:
-        crest = mode["crest"](xy_data, shore_x=shore, columns=columns)
+        crest = mode["crest"](xy_data, shore_x=shore["x"], columns=columns)
     else:
         crest = find_closest_x(xy_data, use_crestx)
+
     if use_toex is None:
-        toe = mode["toe"](xy_data, shore_x=shore, crest_x=crest, columns=columns)
+        toe = mode["toe"](xy_data, shore_x=shore["x"], crest_x=crest["x"], columns=columns)
     else:
         toe = find_closest_x(xy_data, use_toex)
+
     if use_heelx is None:
-        heel = mode["heel"](xy_data, crest_x=crest, columns=columns)
+        heel = mode["heel"](xy_data, crest_x=crest["x"], columns=columns)
     else:
         heel = find_closest_x(xy_data, use_heelx)
 

@@ -30,7 +30,7 @@ MODE_POLY = extract.MODES["poly"]
 MODE_LCP = extract.MODES["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction technique.
-mode = MODE_IP
+mode = MODE_RR
 #################################################################
 
 
@@ -211,7 +211,7 @@ def main(input_path, output_path, mode):
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the remaining points in time. 
     remaining_profiles = remaining_xy.groupby("date", group_keys=False, as_index=False,
-        ).apply(lambda df: extract.identify_features(mode, df ))#, use_toex=first_profiles["toe_x"]))
+        ).apply(lambda df: extract.identify_features(mode, df, use_toex=first_profiles["toe_x"]))
 
     # Combine all the profile data back into a single DataFrame.
     profiles = pd.concat([first_profiles, remaining_profiles])
