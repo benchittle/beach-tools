@@ -1,1 +1,1 @@
-A revamped version of the existing script. Processing has seen some minor optimizations, code is clearer, and profile plotting is now a separate script. This version of the script is meant to be more open to future developments, such as a GUI and additional processing tools.
+
