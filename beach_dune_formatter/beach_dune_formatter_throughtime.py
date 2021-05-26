@@ -198,26 +198,32 @@ def main(input_path, output_path, mode):
     # Sort the data from earliest to latest.
     xy_data.sort_values(by=INDEX, inplace=True, ignore_index=True)
 
-
+    # Generate a column labelling the points of each profile starting at 0. We
+    # use this to align the columns of the pivot table.
+    # Ex: [0, 1, 2, ..., n1 - 1, 0, ..., n2 - 1, 0, ...] where n1, n2, ... are
+    #     the number of points in each profile respectively.
     xy_data["pointIndex"] = xy_data.groupby(INDEX)[xy_data.columns[0]].transform(lambda df: range(len(df)))
+    # Pivot the data to be "wide" rather than "long". Here, this means each 
+    # point (x1, x2, x3, ..., xn, y1, ..., yn, ...) gets its own column, rather
+    # than being in a single x column.
     xy_data = xy_data.pivot(index=INDEX, columns="pointIndex")
 
 
-    # Boolean mask for first time snap.
-    first_timesnap_filter = xy_data["date"] == xy_data["date"].iat[0]
-    # Get the data for the first time snap.
-    first_xy = xy_data[first_timesnap_filter].set_index(INDEX)
-    # Get the data for the remaining time snap.
-    remaining_xy = xy_data[~first_timesnap_filter].set_index(INDEX)
+    # Boolean mask to identify the data from the earliest point in time.
+    first_timesnap_filter = xy_data.index.get_level_values(0) == xy_data.index.get_level_values(0)[0]
+    # Get the data for the earliest point in time.
+    first_xy = xy_data[first_timesnap_filter]
+    # Get the data for the remaining points in time.
+    remaining_xy = xy_data[~first_timesnap_filter]
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
-    first_profiles = extract.identify_features(mode, first_xy)
+    first_profiles = extract.identify_features(mode, first_xy, columns=["x", "y", "rr"])
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the remaining points in time. 
-    remaining_profiles = remaining_xy.groupby("date", group_keys=False, as_index=False,
-        ).apply(lambda df: extract.identify_features(mode, df, use_toex=first_profiles["toe_x"]))
+    remaining_profiles = remaining_xy.groupby("date", group_keys=False, as_index=False, 
+        ).apply(lambda df: extract.identify_features(mode, df, use_toex=first_profiles["toe_x"], columns=["x", "y", "rr"]))
 
     # Combine all the profile data back into a single DataFrame.
     profiles = pd.concat([first_profiles, remaining_profiles])

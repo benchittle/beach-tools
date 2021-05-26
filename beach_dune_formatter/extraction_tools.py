@@ -373,9 +373,7 @@ def find_closest_x(xy_data, old_x, threshold=1):
     return new_xy
 
 
-def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
-    columns = ["x", "y", "rr"]
-
+def identify_features(mode, xy_data, columns, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
     if use_shorex is None:
         shore = mode["shore"](xy_data, columns=columns)
     else:
