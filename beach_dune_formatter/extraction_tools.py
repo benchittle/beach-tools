@@ -45,10 +45,10 @@ class BackwardIndexer(pd.api.indexers.BaseIndexer):
 ############################### SHORE FUNCTIONS ###############################
 
 
-def identify_shore_standard(xy_data, columns):
+def identify_shore_standard(xy_data, columns) -> pd.DataFrame:
     #grouped = xy_data.groupby(xy_data.index.names)
     # Determine the slope of consecutive points over the data.
-    slope = (xy_data["y"] - xy_data["y"].shift(1, axis=1)) / (xy_data["x"] - xy_data["x"].shift(1, axis=1))
+    slope = (xy_data["y"] - xy_data["y"].shift(1)) / (xy_data["x"] - xy_data["x"].shift(1))
 
     # Filtering the data:
     return xy_data[columns].where(
@@ -59,7 +59,7 @@ def identify_shore_standard(xy_data, columns):
         # Maximum elevation of less than 0.85.
         & (xy_data["y"] < 0.85)
         # Positive or 0 slope in the next 2 values.
-        & (slope.rolling(ForwardIndexer(window_size=2), axis=1).min() >= 0)
+        & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
         )#.groupby(xy_data.index.names).transform("min")
     #print(df)
     #quit()
