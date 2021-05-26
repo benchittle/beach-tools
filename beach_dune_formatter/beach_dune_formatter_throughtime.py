@@ -182,7 +182,7 @@ def write_data_excel(path_to_file, dataframes, names):
 ### HAVE THE USER DECLARE HOW THEIR DATA IS CATEGORIZED / ORGANIZED
 ### (need to know for groupby operations)
 def main(input_path, output_path, mode):
-
+    INDEX = ["date", "state", "segment", "profile"]
 
     pd.options.display.max_columns = 15
     pd.options.display.width = 180
@@ -196,13 +196,19 @@ def main(input_path, output_path, mode):
 
     print("\nIdentifying features...")
     # Sort the data from earliest to latest.
-    xy_data.sort_values(by=["date", "state", "segment", "profile"], inplace=True, ignore_index=True)
+    xy_data.sort_values(by=INDEX, inplace=True, ignore_index=True)
+
+
+    xy_data["pointIndex"] = xy_data.groupby(INDEX)[xy_data.columns[0]].transform(lambda df: range(len(df)))
+    xy_data = xy_data.pivot(index=INDEX, columns="pointIndex")
+
+
     # Boolean mask for first time snap.
     first_timesnap_filter = xy_data["date"] == xy_data["date"].iat[0]
     # Get the data for the first time snap.
-    first_xy = xy_data[first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
+    first_xy = xy_data[first_timesnap_filter].set_index(INDEX)
     # Get the data for the remaining time snap.
-    remaining_xy = xy_data[~first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
+    remaining_xy = xy_data[~first_timesnap_filter].set_index(INDEX)
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
