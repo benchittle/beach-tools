@@ -179,6 +179,7 @@ def main(input_path, output_path, mode):
 
     pd.options.display.max_columns = 15
     pd.options.display.width = 180
+    pd.options.display.max_rows = 64
 
     initial_start_time = time.perf_counter()
 
@@ -190,7 +191,7 @@ def main(input_path, output_path, mode):
     print("\nIdentifying features...")
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
-    first_profiles = extract.identify_features(mode, first_xy)
+    first_profiles = extract.identify_features(mode, xy_data.isel(date=0))
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the remaining points in time. 

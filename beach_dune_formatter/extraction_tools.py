@@ -45,31 +45,22 @@ class BackwardIndexer(pd.api.indexers.BaseIndexer):
 ############################### SHORE FUNCTIONS ###############################
 
 
-def identify_shore_standard(xy_data, columns):
-    grouped = xy_data.groupby(xy_data.index.names)
+def identify_shore_standard(xy_data):
     # Determine the slope of consecutive points over the data.
-    slope = (xy_data["y"] - grouped["y"].shift(1)) / (xy_data["x"] - grouped["x"].shift(1))
+    slope = (xy_data["y"] - xy_data["y"].shift(varindex=1)) / (xy_data["x"] - xy_data["x"].shift(varindex=1))
 
     # Filtering the data:
-    return xy_data[columns].where(
+    return xy_data.where(
         # Minimum distance of 10.
-        (xy_data["x"] > 10)
-        # Minimum elevation of more than 0.75.
-        & (xy_data["y"] > 0.75)
-        # Maximum elevation of less than 0.85.
-        & (xy_data["y"] < 0.85)
-        # Positive or 0 slope in the next 2 values.
-        & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
-        ).groupby(xy_data.index.names).transform("min")
-    #print(df)
-    #quit()
-
-    
-    '''xy_data.query(
-        "(x > 10)"
-        "& (y > 0.75)"
-        "& (y < 0.85)"
-        "& (@slope.rolling(2).min().shift(-2) >= 0)")[columns]'''
+        cond=((xy_data["x"] > 10)
+            # Minimum elevation of more than 0.75.
+            & (xy_data["y"] > 0.75)
+            # Maximum elevation of less than 0.85.
+            & (xy_data["y"] < 0.85)
+            # Positive or 0 slope in the next 2 values.
+            & (slope.shift(varindex=-2).rolling(varindex=2).min() >= 0)),
+        drop=True
+        )
 
 
 ################################ TOE FUNCTIONS ################################
@@ -77,10 +68,10 @@ def identify_shore_standard(xy_data, columns):
 
 ### USE .between(left, right, inclusive=False)
 
-def identify_toe_rr(xy_data, shore_x, crest_x, columns):
+def identify_toe_rr(xy_data, shore_x, crest_x):
     grouped = xy_data.groupby(xy_data.index.names)
     # Filtering the data:
-    return xy_data[columns].where(
+    return xy_data.where(
         # Toe must be past shore.
         (xy_data["x"] > shore_x)
         # Toe must be more than 3 units before crest.
@@ -248,29 +239,24 @@ def identify_toe_lcp(xy_data, shore_x, crest_x, columns):
 ############################### CREST FUNCTIONS ###############################
 
 
-def identify_crest_rr(xy_data, shore_x, columns):
-    grouped = xy_data.groupby(xy_data.index.names)
-
+def identify_crest_rr(xy_data, shore_x):
     # Filtering the data:
-    return xy_data[columns].where(
+    return xy_data.where(
         # Crest must be past shore.
-        (xy_data["x"] > shore_x)
-        # Minimum distance of more than 30.
-        & (xy_data["x"] > 30)
-        # Maximum distance of less than 85.
-        & (xy_data["x"] < 85)
-        # Minimum relative relief of more than 0.55.
-        & (xy_data["rr"] > 0.55)
-        # Current elevation is greater than next 10.
-        & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max()) 
-        # Curent relative relief is greater than previous 2.
-        & (xy_data["rr"] > grouped["rr"].rolling(BackwardIndexer(window_size=2)).max())
-        # Current relative relief is greater than next 2.
-        & (xy_data["rr"] > grouped["rr"].rolling(ForwardIndexer(window_size=2)).max())
-    # Extract the first position that satisfied the above conditions from each
-    # profile, if any exist, and return the data for the selected columns.
-    ).groupby(xy_data.index.names).transform("max")
-
+        cond=((xy_data["x"] > shore_x)
+            # Minimum distance of more than 30.
+            & (xy_data["x"] > 30)
+            # Maximum distance of less than 85.
+            & (xy_data["x"] < 85)
+            # Minimum relative relief of more than 0.55.
+            & (xy_data["rr"] > 0.55)
+            # Current elevation is greater than next 10.
+            & (xy_data["y"] > xy_data["y"].shift(varindex=-10).rolling(varindex=10).max()) 
+            # Curent relative relief is greater than previous 2.
+            & (xy_data["rr"] > xy_data["rr"].shift(varindex=2).rolling(varindex=2).max())
+            # Current relative relief is greater than next 2.
+            & (xy_data["rr"] > xy_data["rr"].shift(varindex=-2).rolling(varindex=2).max())),
+        drop=True)
 
 def identify_crest_standard(xy_data, shore_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
@@ -374,25 +360,23 @@ def find_closest_x(xy_data, old_x, threshold=1):
 
 
 def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
-    columns = ["x", "y", "rr"]
-
     if use_shorex is None:
-        shore = mode["shore"](xy_data, columns=columns)
+        shore = mode["shore"](xy_data)
     else:
         shore = find_closest_x(xy_data, use_shorex)
 
     if use_crestx is None:
-        crest = mode["crest"](xy_data, shore_x=shore["x"], columns=columns)
+        crest = mode["crest"](xy_data, shore_x=shore["x"])
     else:
         crest = find_closest_x(xy_data, use_crestx)
 
     if use_toex is None:
-        toe = mode["toe"](xy_data, shore_x=shore["x"], crest_x=crest["x"], columns=columns)
+        toe = mode["toe"](xy_data, shore_x=shore["x"], crest_x=crest["x"])
     else:
         toe = find_closest_x(xy_data, use_toex)
 
     if use_heelx is None:
-        heel = mode["heel"](xy_data, crest_x=crest["x"], columns=columns)
+        heel = mode["heel"](xy_data, crest_x=crest["x"])
     else:
         heel = find_closest_x(xy_data, use_heelx)
 
