@@ -57,12 +57,7 @@ def read_mask_csvs(path_to_dir):
         head, extension = os.path.splitext(file_name)
         if extension == ".csv":
             # Look for a segment number at the end of the file name.
-            segment, date = re.findall(r"\d+", head)
-
-            ### ASSUME NAMING IS CORRECT FOR NOW
-            # If a number was found, read the file and append it to the list.
-            #if segment is not None:
-            #segment = np.int16(segment.group())
+            date = re.findall(r"\d+", head)[-1]
 
             # Read only the necessary columns (INPUT_COLUMNS) and specify
             # data types for each (saves some memory for large amounts of
@@ -75,14 +70,10 @@ def read_mask_csvs(path_to_dir):
                             inplace=True)
             # Insert a column for the date, segment, and state values.
             csv_data.insert(loc=0, column="date", value=pd.to_datetime(date, format="%m%Y"))
-            csv_data.insert(loc=1, column="state", value=STATE)
-            csv_data.insert(loc=2, column="segment", value=np.int16(segment))
 
             csvs.append(csv_data)
 
             print("\tRead {} rows of data from file '{}'".format(len(csv_data), file_name))
-            #else:
-            #    print("\tSkipping file '{}' (no segment number found)".format(file_name))
         else:
             print("\tSkipping file '{}' (not a .csv)".format(file_name))
 
