@@ -7,6 +7,7 @@
 import os, re, time
 import pandas as pd
 import numpy as np
+import xarray as xr
 import extraction_tools as extract
 
 
@@ -78,7 +79,9 @@ def read_mask_csvs(path_to_dir):
             print("\tSkipping file '{}' (not a .csv)".format(file_name))
 
     # Combine the .csvs into a single DataFrame.
-    return pd.concat(csvs)
+    xydf = pd.concat(csvs).sort_values(by=["date", "profile"], ignore_index=True)
+    xydf["varindex"] = xydf.groupby(["date", "profile"]).cumcount()
+    return xydf.set_index(["date", "profile", "varindex"]).to_xarray()
 
 
 def grouped_mean(profiles, n):
@@ -174,7 +177,6 @@ def write_data_excel(path_to_file, dataframes, names):
 ### (need to know for groupby operations)
 def main(input_path, output_path, mode):
 
-
     pd.options.display.max_columns = 15
     pd.options.display.width = 180
 
@@ -186,15 +188,6 @@ def main(input_path, output_path, mode):
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))     
 
     print("\nIdentifying features...")
-    # Sort the data from earliest to latest.
-    xy_data.sort_values(by=["date", "state", "segment", "profile"], inplace=True, ignore_index=True)
-    # Boolean mask for first time snap.
-    first_timesnap_filter = xy_data["date"] == xy_data["date"].iat[0]
-    # Get the data for the first time snap.
-    first_xy = xy_data[first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
-    # Get the data for the remaining time snap.
-    remaining_xy = xy_data[~first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
-    
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
     first_profiles = extract.identify_features(mode, first_xy)
