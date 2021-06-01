@@ -202,12 +202,12 @@ def main(input_path, output_path, mode):
     # use this to align the columns of the pivot table.
     # Ex: [0, 1, 2, ..., n1 - 1, 0, ..., n2 - 1, 0, ...] where n1, n2, ... are
     #     the number of points in each profile respectively.
-    xy_data["pointIndex"] = xy_data.groupby(INDEX)[xy_data.columns[0]].transform(lambda df: range(len(df)))
+    xy_data["pointindex"] = xy_data.groupby(INDEX).cumcount()
     # Pivot the data to be "wide" rather than "long". Here, this means each 
     # point (x1, x2, x3, ..., xn, y1, ..., yn, ...) gets its own column, rather
     # than being in a single x column.
     earliest_date = str(xy_data.at[0, "date"].date())
-    xy_data = xy_data.pivot(index="pointIndex", columns=INDEX)
+    xy_data = xy_data.pivot(index="pointindex", columns=INDEX)
 
 
     # Boolean mask to identify the data from the earliest point in time.
