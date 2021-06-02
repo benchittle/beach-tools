@@ -198,11 +198,11 @@ def main(input_path, output_path, mode):
     # Sort the data from earliest to latest.
     xy_data.sort_values(by=["date", "state", "segment", "profile"], inplace=True, ignore_index=True)
     # Boolean mask for first time snap.
-    first_timesnap_filter = xy_data["date"] == xy_data["date"].iat[0]
+    time_period_filter = xy_data["date"] == xy_data["date"].iat[0]
     # Get the data for the first time snap.
-    first_xy = xy_data[first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
+    first_xy = xy_data[time_period_filter].set_index(["date", "state", "segment", "profile"])
     # Get the data for the remaining time snap.
-    remaining_xy = xy_data[~first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
+    remaining_xy = xy_data[~time_period_filter].set_index(["date", "state", "segment", "profile"])
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
