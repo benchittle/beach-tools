@@ -207,15 +207,15 @@ def main(input_path, output_path, mode):
     # point (x1, x2, x3, ..., xn, y1, ..., yn, ...) gets its own column, rather
     # than being in a single x column.
     earliest_date = str(xy_data.at[0, "date"].date())
-    xy_data = xy_data.pivot(index="pointindex", columns=INDEX)
+    xy_data = xy_data.pivot(index=INDEX, columns="pointindex")
 
 
     # Boolean mask to identify the data from the earliest point in time.
-    time_filter = xy_data.columns.get_level_values(xy_data.columns.names.index("date")) == earliest_date
+    time_filter = xy_data.index.get_level_values(xy_data.index.names.index("date")) == earliest_date
     # Get the data for the earliest point in time.
-    first_xy = xy_data.loc[:, time_filter]
+    first_xy = xy_data[time_filter]
     # Get the data for the remaining points in time.
-    remaining_xy = xy_data.loc[:, ~time_filter]
+    remaining_xy = xy_data[~time_filter]
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
