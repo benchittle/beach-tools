@@ -45,7 +45,7 @@ def read_mask_csvs(path_to_dir):
     STATE = np.uint8(29)
     INPUT_COLUMNS = ["LINE_ID", "FIRST_DIST", "FIRST_Z", "FIRST_RR"]
     OUTPUT_COLUMNS = ["profile", "x", "y", "rr"]
-    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32]))
+    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float64, np.float64, np.float64]))
 
     if not path_to_dir.endswith("\\"):
         path_to_dir += "\\"
