@@ -101,11 +101,11 @@ def identify_toe_rr(xy_data, shore_x, crest_x, columns):
 def identify_toe_rrfar(xy_data, shore_x, crest_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
     # Filtering the data:
-    return xy_data[
+    return xy_data[columns][
         # Toe must be past shore.
-        (xy_data["x"] > shore_x["x"].reindex(xy_data.index))
+        (xy_data["x"] > shore_x)
         # Toe must be more than 10 units before crest.
-        & (xy_data["x"] < crest_x["x"].reindex(xy_data.index) - 10)
+        & (xy_data["x"] < crest_x - 10)
         # Minimum relative relief of 0.25.
         & (xy_data["rr"] >= 0.25)
         # Previous relative relief greater than 0.25.
@@ -116,7 +116,7 @@ def identify_toe_rrfar(xy_data, shore_x, crest_x, columns):
         & (xy_data["x"] > 40)
     # Extract the first position that satisfied the above conditions from each
     # profile, if any exist, and return the data for the selected columns.
-    ].groupby(xy_data.index.names).head(1)[columns]
+    ].groupby(xy_data.index.names).head(1)
 
 
 def identify_toe_ip(xy_data, shore_x, crest_x, columns):
