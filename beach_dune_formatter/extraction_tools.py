@@ -52,15 +52,15 @@ def identify_shore_standard(xy_data, columns):
 
     # Filtering the data:
     return xy_data[columns][
-            # Minimum distance of 10.
-            (xy_data["x"] > 10)
-            # Minimum elevation of more than 0.75.
-            & (xy_data["y"] > 0.75)
-            # Maximum elevation of less than 0.85.
-            & (xy_data["y"] < 0.85)
-            # Positive or 0 slope in the next 2 values.
-            & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
-        ].groupby(xy_data.index.names).head(1)
+        # Minimum distance of 10.
+        (xy_data["x"] > 10)
+        # Minimum elevation of more than 0.75.
+        & (xy_data["y"] > 0.75)
+        # Maximum elevation of less than 0.85.
+        & (xy_data["y"] < 0.85)
+        # Positive or 0 slope in the next 2 values.
+        & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
+    ].groupby(xy_data.index.names).head(1)
 
 
 ################################ TOE FUNCTIONS ################################
@@ -72,21 +72,21 @@ def identify_toe_rr(xy_data, shore_x, crest_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
     # Filtering the data:
     return xy_data[columns][
-            # Toe must be past shore.
-            (xy_data["x"] > shore_x)
-            # Toe must be more than 3 units before crest.
-            & (xy_data["x"] < crest_x - 3)
-            # Maximum relative relief of 0.25.
-            & (xy_data["rr"] <= 0.25)
-            # Previous relative relief less than 0.25.
-            & (grouped["rr"].shift(1) < 0.25)
-            # Next relative relief greater than 0.25.
-            & (grouped["rr"].shift(-1) > 0.25)
-            # 25 for november, sept and july are at 40, 50 for July2020
-            & (xy_data["x"] > 50)
-        # Extract the first position that satisfied the above conditions from each
-        # profile, if any exist, and return the data for the selected columns.
-        ].groupby(xy_data.index.names).head(1)
+        # Toe must be past shore.
+        (xy_data["x"] > shore_x)
+        # Toe must be more than 3 units before crest.
+        & (xy_data["x"] < crest_x - 3)
+        # Maximum relative relief of 0.25.
+        & (xy_data["rr"] <= 0.25)
+        # Previous relative relief less than 0.25.
+        & (grouped["rr"].shift(1) < 0.25)
+        # Next relative relief greater than 0.25.
+        & (grouped["rr"].shift(-1) > 0.25)
+        # 25 for november, sept and july are at 40, 50 for July2020
+        & (xy_data["x"] > 50)
+    # Extract the first position that satisfied the above conditions from each
+    # profile, if any exist, and return the data for the selected columns.
+    ].groupby(xy_data.index.names).head(1)
 
 
 def identify_toe_rrfar(xy_data, shore_x, crest_x, columns):
@@ -244,23 +244,23 @@ def identify_crest_rr(xy_data, shore_x, columns):
 
     # Filtering the data:
     return xy_data[columns][
-            # Crest must be past shore.
-            (xy_data["x"] > shore_x)
-            # Minimum distance of more than 30.
-            & (xy_data["x"] > 30)
-            # Maximum distance of less than 85.
-            & (xy_data["x"] < 85)
-            # Minimum relative relief of more than 0.55.
-            & (xy_data["rr"] > 0.55)
-            # Current elevation is greater than next 10.
-            & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max()) 
-            # Curent relative relief is greater than previous 2.
-            & (xy_data["rr"] > grouped["rr"].rolling(BackwardIndexer(window_size=2)).max())
-            # Current relative relief is greater than next 2.
-            & (xy_data["rr"] > grouped["rr"].rolling(ForwardIndexer(window_size=2)).max())
-        # Extract the first position that satisfied the above conditions from each
-        # profile, if any exist, and return the data for the selected columns.
-        ].groupby(xy_data.index.names).head(1)
+        # Crest must be past shore.
+        (xy_data["x"] > shore_x)
+        # Minimum distance of more than 30.
+        & (xy_data["x"] > 30)
+        # Maximum distance of less than 85.
+        & (xy_data["x"] < 85)
+        # Minimum relative relief of more than 0.55.
+        & (xy_data["rr"] > 0.55)
+        # Current elevation is greater than next 10.
+        & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max()) 
+        # Curent relative relief is greater than previous 2.
+        & (xy_data["rr"] > grouped["rr"].rolling(BackwardIndexer(window_size=2)).max())
+        # Current relative relief is greater than next 2.
+        & (xy_data["rr"] > grouped["rr"].rolling(ForwardIndexer(window_size=2)).max())
+    # Extract the first position that satisfied the above conditions from each
+    # profile, if any exist, and return the data for the selected columns.
+    ].groupby(xy_data.index.names).head(1)
 
 
 def identify_crest_standard(xy_data, shore_x, columns):
