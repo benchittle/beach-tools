@@ -299,12 +299,12 @@ def identify_heel_rr(xy_data, crest_x, columns):
     
     # Filtering the data:
     return xy_data[columns][
-            # Heel must be more than 5 units past the crest.
-            (xy_data["x"] > crest_x + 5)
-            # Previous 2 relative relief values are greater than 0.4.
-            & (grouped["rr"].rolling(BackwardIndexer(window_size=2)).min() > 0.4)
-            # Next 2 relative relief values are less than 0.4.
-            & (grouped["rr"].rolling(ForwardIndexer(window_size=2)).max() < 0.4)
+        # Heel must be more than 5 units past the crest.
+        (xy_data["x"] > crest_x + 5)
+        # Previous 2 relative relief values are greater than 0.4.
+        & (grouped["rr"].rolling(BackwardIndexer(window_size=2)).min() > 0.4)
+        # Next 2 relative relief values are less than 0.4.
+        & (grouped["rr"].rolling(ForwardIndexer(window_size=2)).max() < 0.4)
         ].groupby(xy_data.index.names).head(1)
 
 
@@ -342,33 +342,30 @@ MODES = {
 }
 
 ### new_x must have index of date state seg profile
-def find_closest_x(xy_data, old_x, threshold=1):
+def find_closest_x(xy_data, old_feature_x, tolerance=1):
     """
     For each profile, find the closest x position in xy_data to the 
-    x position in old_x. Positions closer than the specified threshold
+    x position in old_feature_x. Positions closer than the specified threshold
     are returned in the new xy_data.
 
     ARGUMENTS:
-    old_x: Series
+    old_feature_x: Series
       Single x value for each profile.
-    threshold: float
-      Maximum distance between old_x x value and the closest one in xy_data.
+    tolerance: float
+      Maximum distance between old_feature_x x value and the closest x found in xy_data.
     """
 
-    #xy_data = xy_data.set_index(["state", "segment", "profile"])
-
-    # Insert a column for the distance between old x values and new x values.
-    xy_data["dist"] = (xy_data["x"] - old_x.reset_index("date", drop=True).reindex_like(xy_data)).abs()
-    xy_data.set_index("x", append=True, drop=False, inplace=True)
-    # Create a new DataFrame for the closest x values in xy_data to those in old_x.
-    new_xy = xy_data.loc[xy_data.groupby(["state", "segment", "profile"])["dist"].idxmin().dropna()]
-    # Filter out x values that exceeded the distance threshold.
-    new_xy = new_xy[new_xy["dist"] < threshold]
-
-    new_xy.drop(columns="dist", inplace=True)
-    new_xy.reset_index("x", drop=True, inplace=True)
-    new_xy.reset_index(inplace=True)
-    return new_xy
+    # Determine the horizontal distance to the feature from each x coordinate
+    # for each profile.
+    dist = xy_data["x"].subtract(old_feature_x.reset_index(drop=True), level=-1).abs()
+    # Identify the new feature coords:
+    return xy_data[
+        # Look for the point in the new data closest to the feature's point in 
+        # the old data.
+        (dist.groupby(dist.index.names).transform("min") == dist) 
+        # The point must be at least as close as the threshhold.
+        & (dist < tolerance)
+        ]
 
 
 def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
