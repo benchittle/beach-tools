@@ -405,7 +405,7 @@ def identify_features(
 
     # Rename the columns of each feature's DataFrame
     for data, name in zip((shore, toe, crest, heel), ("shore", "toe", "crest", "heel")):
-        data.rename(columns={"x" : name + "_x", "y" : name + "_y", "rr" : name + "_rr"}, inplace=True)
+        data.rename(columns={var : name + "_" + var for var in columns}, inplace=True)
 
     # Combine the feature DataFrames into a single DataFrame.
     return pd.concat([shore, toe, crest, heel], axis=1)
