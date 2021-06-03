@@ -30,7 +30,7 @@ POLY = extract.EXTRACTION_METHODS["poly"]
 LCP = extract.EXTRACTION_METHODS["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction technique.
-extraction_method = POLY
+extraction_method = RR
 #################################################################
 
 
