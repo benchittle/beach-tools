@@ -172,17 +172,17 @@ def _identify_toe_poly_old(profile_xy):
 
 def identify_toe_poly(xy_data, shore_x, crest_x, columns): 
     # Insert columns for the shore and crest values for each profile in xy_data.
-    xy_data["shore_x"] = shore_x["x"].reindex_like(xy_data)
-    xy_data["crest_x"] = crest_x["x"].reindex_like(xy_data)
+    xy_data["shore_x"] = shore_x
+    xy_data["crest_x"] = crest_x
 
     # Apply the old polynomial toe identification function profile-wise on the 
     # DataFrame.
-    toes = xy_data.dropna().groupby(xy_data.index.names).apply(_identify_toe_poly_old).rename("x")
+    toe = xy_data.dropna().groupby(xy_data.index.names).apply(_identify_toe_poly_old).rename("x")
     # Extract the rows corresponding to each identified toe in the original data.
-    toes = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toes.reset_index())]
+    toe = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toe.reset_index())]
 
     # Return the data for the selected columns.
-    return toes.reset_index("x")[columns]
+    return toe.reset_index("x")[columns]
 
 
 def _identify_toe_lcp_old(profile_xy):
