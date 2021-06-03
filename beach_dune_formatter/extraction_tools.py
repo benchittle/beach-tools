@@ -61,15 +61,6 @@ def identify_shore_standard(xy_data, columns):
             # Positive or 0 slope in the next 2 values.
             & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
         ].groupby(xy_data.index.names).head(1)
-    #print(df)
-    #quit()
-
-    
-    '''xy_data.query(
-        "(x > 10)"
-        "& (y > 0.75)"
-        "& (y < 0.85)"
-        "& (@slope.rolling(2).min().shift(-2) >= 0)")[columns]'''
 
 
 ################################ TOE FUNCTIONS ################################
@@ -130,18 +121,18 @@ def identify_toe_ip(xy_data, shore_x, crest_x, columns):
         & (xy_data["y"] < 3.2)]
     grouped = filtered_xy.groupby(filtered_xy.index.names)
 
-    # Calculate the change in slope between each point for each profile:
-    # First calculate the slope.
-    slope_change = ((filtered_xy["y"] - grouped["y"].shift(1)) 
-                    / (filtered_xy["x"] - grouped["x"].shift(1)))
-    # Then calculate the change in slope for each value.
-    slope_change = slope_change - slope_change.groupby(slope_change.index.names).shift(1)
+    # Calculate the change in slope between consecutive points:
+    slope_change = (
+        # Calculate slope between consecutive points.
+        ((filtered_xy["y"] - grouped["y"].shift(1)) / (filtered_xy["x"] - grouped["x"].shift(1)))
+        # Calculate first differences of the slope.
+        .diff())
 
     # Identify the toe as the point with the greatest change in slope for each
     # profile and return the data for the selected columns.
-    return filtered_xy[
+    return filtered_xy[columns][
         slope_change == slope_change.groupby(slope_change.index.names).transform("max")
-        ].groupby(filtered_xy.index.names).head(1)[columns]
+        ].groupby(filtered_xy.index.names).head(1)
    
 
 def _identify_toe_poly_old(profile_xy):
@@ -276,9 +267,9 @@ def identify_crest_standard(xy_data, shore_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
 
     # Filtering the data:
-    return xy_data[
+    return xy_data[columns][
         # Crest must be past shore.
-        (xy_data["x"] > shore_x["x"])
+        (xy_data["x"] > shore_x)
         # Curent elevation is the largest so far.
         #use cummax?
         & (xy_data["y"] > grouped["y"].shift(1).groupby(xy_data.index.names).expanding(min_periods=1).max())
@@ -288,7 +279,7 @@ def identify_crest_standard(xy_data, shore_x, columns):
         & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max())
     # Extract the first position that satisfied the above conditions from each
     # profile, if any exist, and return the data for the selected columns.
-    ].groupby(xy_data.index.names).head(1)[columns]
+    ].groupby(xy_data.index.names).head(1)
 
 
 ############################### CREST FUNCTIONS ###############################
@@ -314,7 +305,7 @@ def identify_heel_standard(xy_data, crest_x, columns):
     # Filtering the data:
     xy_filtered = xy_data[
         # Heel must be past crest.
-        (xy_data["x"] > crest_x["x"].reindex(xy_data.index))
+        (xy_data["x"] > crest_x)
         # The following conditions specify the data to be filtered OUT when satisfied:
         # ('~' inverts the conditions)
             # There is a decrease in elevation of more than 0.6 in the next 10 values.
@@ -328,7 +319,7 @@ def identify_heel_standard(xy_data, crest_x, columns):
     # for each profile after filtering, for the selected columns.
     return xy_filtered[
         xy_filtered["y"] == xy_filtered["y"].groupby(xy_filtered.index.names).transform("min")
-        ].groupby(xy_filtered.index.names).head(1)[columns]
+        ][columns].groupby(xy_filtered.index.names).head(1)
 
 
 ############################# PROFILE EXTRACTION ##############################
