@@ -332,29 +332,35 @@ MODES = {
     "lcp" : {"shore":identify_shore_standard, "toe":identify_toe_lcp, "crest":identify_crest_standard, "heel":identify_heel_standard}
 }
 
-### new_x must have index of date state seg profile
-def find_closest_x(xy_data, old_feature_x, tolerance=1):
+
+def project_feature(new_xy_data, old_feature_x, tolerance=1):
     """
-    For each profile, find the closest x position in xy_data to the 
-    x position in old_feature_x. Positions closer than the specified threshold
-    are returned in the new xy_data.
+    Project feature positions from one point in time onto another point in time
+    given xy data for the new point in time. Uses the closest x coordinate in 
+    new_xy_data to the feature's old x coordinate, within the specified tolerance.
 
     ARGUMENTS:
+    new_xy_data: DataFrame
+      Must contain x and y data for some of the same profiles as old_feature_x
     old_feature_x: Series
-      Single x value for each profile.
+      Single x value for each profile marking the horizontal location of a 
+      feature.
     tolerance: float
-      Maximum distance between old_feature_x x value and the closest x found in xy_data.
+      Maximum distance between old_feature_x x value and the closest x found in 
+      new_xy_data.
     """
 
-    # Determine the horizontal distance to the feature from each x coordinate
-    # for each profile.
-    dist = xy_data["x"].subtract(old_feature_x.reset_index(drop=True), level=-1).abs()
-    # Identify the new feature coords:
-    return xy_data[
-        # Look for the point in the new data closest to the feature's point in 
-        # the old data.
+    # Along each profile, determine the horizontal distance to the feature from 
+    # each x coordinate.
+    # .subtract is used to allow level=-1 to be specified (less fiddling with 
+    # aligning the two pieces of data).
+    dist = new_xy_data["x"].subtract(old_feature_x.reset_index(drop=True), level=-1).abs()
+    # Identify the new feature coords. For each profile:
+    return new_xy_data[
+        # look for the point in the new data closest horizontally to the 
+        # feature's position in the old data.
         (dist.groupby(dist.index.names).transform("min") == dist) 
-        # The point must be at least as close as the threshhold.
+        # make sure the distance to the point does not exceed the tolerance.
         & (dist < tolerance)
         ]
 
@@ -365,24 +371,24 @@ def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=
     if use_shorex is None:
         shore = mode["shore"](xy_data, columns=columns)
     else:
-        shore = find_closest_x(xy_data, use_shorex)
+        shore = project_feature(xy_data, use_shorex)
     shore_x_aligned = shore["x"].align(xy_data)[0]
 
     if use_crestx is None:
         crest = mode["crest"](xy_data, shore_x=shore_x_aligned, columns=columns)
     else:
-        crest = find_closest_x(xy_data, use_crestx)
+        crest = project_feature(xy_data, use_crestx)
     crest_x_aligned = crest["x"].align(xy_data)[0]
 
     if use_toex is None:
         toe = mode["toe"](xy_data, shore_x=shore_x_aligned, crest_x=crest_x_aligned, columns=columns)
     else:
-        toe = find_closest_x(xy_data, use_toex)
+        toe = project_feature(xy_data, use_toex)
 
     if use_heelx is None:
         heel = mode["heel"](xy_data, crest_x=crest_x_aligned, columns=columns)
     else:
-        heel = find_closest_x(xy_data, use_heelx)
+        heel = project_feature(xy_data, use_heelx)
 
     for data, name in zip((shore, toe, crest, heel), ("shore", "toe", "crest", "heel")):
         data.rename(columns={"x" : name + "_x", "y" : name + "_y", "rr" : name + "_rr"}, inplace=True)
