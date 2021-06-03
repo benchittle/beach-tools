@@ -23,14 +23,14 @@ current_output = BEN_OUT
 #############################################################
 
 
-MODE_RR = extract.MODES["rr"]
-MODE_RR_FAR = extract.MODES["rrfar"]
-MODE_IP = extract.MODES["ip"]
-MODE_POLY = extract.MODES["poly"]
-MODE_LCP = extract.MODES["lcp"]
+RR = extract.EXTRACTION_METHODS["rr"]
+RR_FAR = extract.EXTRACTION_METHODS["rrfar"]
+IP = extract.EXTRACTION_METHODS["ip"]
+POLY = extract.EXTRACTION_METHODS["poly"]
+LCP = extract.EXTRACTION_METHODS["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction technique.
-mode = MODE_RR
+extraction_method = RR
 #################################################################
 
 
@@ -181,7 +181,7 @@ def write_data_excel(path_to_file, dataframes, names):
 
 ### HAVE THE USER DECLARE HOW THEIR DATA IS CATEGORIZED / ORGANIZED
 ### (need to know for groupby operations)
-def main(input_path, output_path, mode):
+def main(input_path, output_path, extraction_method):
 
 
     pd.options.display.max_columns = 15
@@ -197,21 +197,25 @@ def main(input_path, output_path, mode):
     print("\nIdentifying features...")
     # Sort the data from earliest to latest.
     xy_data.sort_values(by=["date", "state", "segment", "profile"], inplace=True, ignore_index=True)
-    # Boolean mask for first time snap.
-    first_timesnap_filter = xy_data["date"] == xy_data["date"].iat[0]
+    # Boolean mask identifying 
+    time_period_filter = xy_data["date"] == xy_data["date"].iat[0]
     # Get the data for the first time snap.
-    first_xy = xy_data[first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
+    first_xy = xy_data[time_period_filter].set_index(["date", "state", "segment", "profile"])
     # Get the data for the remaining time snap.
-    remaining_xy = xy_data[~first_timesnap_filter].set_index(["date", "state", "segment", "profile"])
+    remaining_xy = xy_data[~time_period_filter].set_index(["date", "state", "segment", "profile"])
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the earliest point in time. 
-    first_profiles = extract.identify_features(mode, first_xy)
+    first_profiles = extract.identify_features(
+        extract_methods=extraction_method, 
+        xy_data=first_xy, 
+        columns=["x", "y", "rr"]
+        )
     
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data from the remaining points in time. 
     remaining_profiles = remaining_xy.groupby("date", group_keys=False, as_index=False,
-        ).apply(lambda df: extract.identify_features(mode, df, use_toex=first_profiles["toe_x"]))
+        ).apply(lambda df: extract.identify_features(extraction_method, df, ["x", "y", "rr"], project_toex=first_profiles["toe_x"]))
 
     # Combine all the profile data back into a single DataFrame.
     profiles = pd.concat([first_profiles, remaining_profiles])
@@ -315,5 +319,5 @@ def main(input_path, output_path, mode):
 
 if __name__ == "__main__":
     #xy_data, profiles, beach_data, filtered_beach_data, avg = main(current_input, current_output)
-    data = main(current_input, current_output, mode)
+    data = main(current_input, current_output, extraction_method)
 
