@@ -23,14 +23,14 @@ current_output = BEN_OUT
 #############################################################
 
 
-MODE_RR = extract.MODES["rr"]
-MODE_RR_FAR = extract.MODES["rrfar"]
-MODE_IP = extract.MODES["ip"]
-MODE_POLY = extract.MODES["poly"]
-MODE_LCP = extract.MODES["lcp"]
+RR = extract.EXTRACTION_METHODS["rr"]
+RR_FAR = extract.EXTRACTION_METHODS["rrfar"]
+IP = extract.EXTRACTION_METHODS["ip"]
+POLY = extract.EXTRACTION_METHODS["poly"]
+LCP = extract.EXTRACTION_METHODS["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction technique.
-mode = MODE_RR
+extraction_method = RR
 #################################################################
 
 

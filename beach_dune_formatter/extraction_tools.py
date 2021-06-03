@@ -324,7 +324,7 @@ def identify_heel_standard(xy_data, crest_x, columns):
 
 ############################# PROFILE EXTRACTION ##############################
 # Default extraction modes.
-MODES = {
+EXTRACTION_METHODS = {
     "rr" : {"shore":identify_shore_standard, "toe":identify_toe_rr, "crest":identify_crest_rr, "heel":identify_heel_rr},
     "rrfar" : {"shore":identify_shore_standard, "toe":identify_toe_rrfar, "crest":identify_crest_rr, "heel":identify_heel_rr},
     "ip" : {"shore":identify_shore_standard, "toe":identify_toe_ip, "crest":identify_crest_standard, "heel":identify_heel_standard},
@@ -333,7 +333,7 @@ MODES = {
 }
 
 
-def project_feature(new_xy_data, old_feature_x, tolerance=1):
+def project_feature(new_xy_data, old_feature_x, tolerance=1) -> pd.DataFrame:
     """
     Project feature positions from one point in time onto another point in time
     given xy data for the new point in time. Uses the closest x coordinate in 
@@ -365,34 +365,49 @@ def project_feature(new_xy_data, old_feature_x, tolerance=1):
         ]
 
 
-def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=None, use_heelx=None):
-    columns = ["x", "y", "rr"]
+def identify_features(
+    extract_methods, 
+    xy_data, 
+    columns,
+    project_shorex=None, 
+    project_toex=None, 
+    project_crestx=None, 
+    project_heelx=None    
+) -> pd.DataFrame:
 
-    if use_shorex is None:
-        shore = mode["shore"](xy_data, columns=columns)
+    # Identify the shoreline for each profile. If any of 'project' arguments
+    # were given, that feature will be identified by projecting x coords from a
+    # previous point in time onto the new xy data.
+    if project_shorex is None:
+        shore = extract_methods["shore"](xy_data, columns=columns)
     else:
-        shore = project_feature(xy_data, use_shorex)
+        shore = project_feature(xy_data, project_shorex)
     shore_x_aligned = shore["x"].align(xy_data)[0]
 
-    if use_crestx is None:
-        crest = mode["crest"](xy_data, shore_x=shore_x_aligned, columns=columns)
+    # Identify the crest for each profile.
+    if project_crestx is None:
+        crest = extract_methods["crest"](xy_data, shore_x=shore_x_aligned, columns=columns)
     else:
-        crest = project_feature(xy_data, use_crestx)
+        crest = project_feature(xy_data, project_crestx)
     crest_x_aligned = crest["x"].align(xy_data)[0]
 
-    if use_toex is None:
-        toe = mode["toe"](xy_data, shore_x=shore_x_aligned, crest_x=crest_x_aligned, columns=columns)
+    # Identify the toe for each profile.
+    if project_toex is None:
+        toe = extract_methods["toe"](xy_data, shore_x=shore_x_aligned, crest_x=crest_x_aligned, columns=columns)
     else:
-        toe = project_feature(xy_data, use_toex)
+        toe = project_feature(xy_data, project_toex)
 
-    if use_heelx is None:
-        heel = mode["heel"](xy_data, crest_x=crest_x_aligned, columns=columns)
+    # Identify the heel for each profile.
+    if project_heelx is None:
+        heel = extract_methods["heel"](xy_data, crest_x=crest_x_aligned, columns=columns)
     else:
-        heel = project_feature(xy_data, use_heelx)
+        heel = project_feature(xy_data, project_heelx)
 
+    # Rename the columns of each feature's DataFrame
     for data, name in zip((shore, toe, crest, heel), ("shore", "toe", "crest", "heel")):
         data.rename(columns={"x" : name + "_x", "y" : name + "_y", "rr" : name + "_rr"}, inplace=True)
 
+    # Combine the feature DataFrames into a single DataFrame.
     return pd.concat([shore, toe, crest, heel], axis=1)
 
 
