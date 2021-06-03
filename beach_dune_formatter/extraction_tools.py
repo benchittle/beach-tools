@@ -51,16 +51,16 @@ def identify_shore_standard(xy_data, columns):
     slope = (xy_data["y"] - grouped["y"].shift(1)) / (xy_data["x"] - grouped["x"].shift(1))
 
     # Filtering the data:
-    return xy_data[columns].where(
-        # Minimum distance of 10.
-        (xy_data["x"] > 10)
-        # Minimum elevation of more than 0.75.
-        & (xy_data["y"] > 0.75)
-        # Maximum elevation of less than 0.85.
-        & (xy_data["y"] < 0.85)
-        # Positive or 0 slope in the next 2 values.
-        & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
-        ).groupby(xy_data.index.names).transform("min")
+    return xy_data[columns][
+            # Minimum distance of 10.
+            (xy_data["x"] > 10)
+            # Minimum elevation of more than 0.75.
+            & (xy_data["y"] > 0.75)
+            # Maximum elevation of less than 0.85.
+            & (xy_data["y"] < 0.85)
+            # Positive or 0 slope in the next 2 values.
+            & (slope.rolling(ForwardIndexer(window_size=2)).min() >= 0)
+        ].groupby(xy_data.index.names).head(1)
     #print(df)
     #quit()
 
@@ -80,22 +80,22 @@ def identify_shore_standard(xy_data, columns):
 def identify_toe_rr(xy_data, shore_x, crest_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
     # Filtering the data:
-    return xy_data[columns].where(
-        # Toe must be past shore.
-        (xy_data["x"] > shore_x)
-        # Toe must be more than 3 units before crest.
-        & (xy_data["x"] < crest_x - 3)
-        # Maximum relative relief of 0.25.
-        & (xy_data["rr"] <= 0.25)
-        # Previous relative relief less than 0.25.
-        & (grouped["rr"].shift(1) < 0.25)
-        # Next relative relief greater than 0.25.
-        & (grouped["rr"].shift(-1) > 0.25)
-        # 25 for november, sept and july are at 40, 50 for July2020
-        & (xy_data["x"] > 50)
-    # Extract the first position that satisfied the above conditions from each
-    # profile, if any exist, and return the data for the selected columns.
-    ).groupby(xy_data.index.names).transform("min")
+    return xy_data[columns][
+            # Toe must be past shore.
+            (xy_data["x"] > shore_x)
+            # Toe must be more than 3 units before crest.
+            & (xy_data["x"] < crest_x - 3)
+            # Maximum relative relief of 0.25.
+            & (xy_data["rr"] <= 0.25)
+            # Previous relative relief less than 0.25.
+            & (grouped["rr"].shift(1) < 0.25)
+            # Next relative relief greater than 0.25.
+            & (grouped["rr"].shift(-1) > 0.25)
+            # 25 for november, sept and july are at 40, 50 for July2020
+            & (xy_data["x"] > 50)
+        # Extract the first position that satisfied the above conditions from each
+        # profile, if any exist, and return the data for the selected columns.
+        ].groupby(xy_data.index.names).head(1)
 
 
 def identify_toe_rrfar(xy_data, shore_x, crest_x, columns):
@@ -252,24 +252,24 @@ def identify_crest_rr(xy_data, shore_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
 
     # Filtering the data:
-    return xy_data[columns].where(
-        # Crest must be past shore.
-        (xy_data["x"] > shore_x)
-        # Minimum distance of more than 30.
-        & (xy_data["x"] > 30)
-        # Maximum distance of less than 85.
-        & (xy_data["x"] < 85)
-        # Minimum relative relief of more than 0.55.
-        & (xy_data["rr"] > 0.55)
-        # Current elevation is greater than next 10.
-        & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max()) 
-        # Curent relative relief is greater than previous 2.
-        & (xy_data["rr"] > grouped["rr"].rolling(BackwardIndexer(window_size=2)).max())
-        # Current relative relief is greater than next 2.
-        & (xy_data["rr"] > grouped["rr"].rolling(ForwardIndexer(window_size=2)).max())
-    # Extract the first position that satisfied the above conditions from each
-    # profile, if any exist, and return the data for the selected columns.
-    ).groupby(xy_data.index.names).transform("max")
+    return xy_data[columns][
+            # Crest must be past shore.
+            (xy_data["x"] > shore_x)
+            # Minimum distance of more than 30.
+            & (xy_data["x"] > 30)
+            # Maximum distance of less than 85.
+            & (xy_data["x"] < 85)
+            # Minimum relative relief of more than 0.55.
+            & (xy_data["rr"] > 0.55)
+            # Current elevation is greater than next 10.
+            & (xy_data["y"] > grouped["y"].rolling(ForwardIndexer(window_size=10)).max()) 
+            # Curent relative relief is greater than previous 2.
+            & (xy_data["rr"] > grouped["rr"].rolling(BackwardIndexer(window_size=2)).max())
+            # Current relative relief is greater than next 2.
+            & (xy_data["rr"] > grouped["rr"].rolling(ForwardIndexer(window_size=2)).max())
+        # Extract the first position that satisfied the above conditions from each
+        # profile, if any exist, and return the data for the selected columns.
+        ].groupby(xy_data.index.names).head(1)
 
 
 def identify_crest_standard(xy_data, shore_x, columns):
@@ -278,8 +278,9 @@ def identify_crest_standard(xy_data, shore_x, columns):
     # Filtering the data:
     return xy_data[
         # Crest must be past shore.
-        (xy_data["x"] > shore_x["x"].reindex(xy_data.index))
+        (xy_data["x"] > shore_x["x"])
         # Curent elevation is the largest so far.
+        #use cummax?
         & (xy_data["y"] > grouped["y"].shift(1).groupby(xy_data.index.names).expanding(min_periods=1).max())
         # There is an elevation decrease of more than 2 in the next 20 values.
         & (xy_data["y"] - grouped["y"].rolling(ForwardIndexer(window_size=20)).min() > 2)
@@ -297,17 +298,14 @@ def identify_heel_rr(xy_data, crest_x, columns):
     grouped = xy_data.groupby(xy_data.index.names)
     
     # Filtering the data:
-    xy_filtered = xy_data[
-        # Heel must be more than 5 units past the crest.
-        (xy_data["x"] > (crest_x["x"] + 5).reindex(xy_data.index))
-        # Previous 2 relative relief values are greater than 0.4.
-        & (grouped["rr"].rolling(BackwardIndexer(window_size=2)).min() > 0.4)
-        # Next 2 relative relief values are less than 0.4.
-        & (grouped["rr"].rolling(ForwardIndexer(window_size=2)).max() < 0.4)]
-
-    return xy_filtered[
-        xy_filtered["y"] == xy_filtered["y"].groupby(xy_filtered.index.names).transform("min")
-        ].groupby(xy_filtered.index.names).head(1)[columns]
+    return xy_data[columns][
+            # Heel must be more than 5 units past the crest.
+            (xy_data["x"] > crest_x + 5)
+            # Previous 2 relative relief values are greater than 0.4.
+            & (grouped["rr"].rolling(BackwardIndexer(window_size=2)).min() > 0.4)
+            # Next 2 relative relief values are less than 0.4.
+            & (grouped["rr"].rolling(ForwardIndexer(window_size=2)).max() < 0.4)
+        ].groupby(xy_data.index.names).head(1)
 
 
 def identify_heel_standard(xy_data, crest_x, columns):
@@ -380,19 +378,21 @@ def identify_features(mode, xy_data, use_shorex=None, use_toex=None, use_crestx=
         shore = mode["shore"](xy_data, columns=columns)
     else:
         shore = find_closest_x(xy_data, use_shorex)
+    shore_x_aligned = shore["x"].align(xy_data)[0]
 
     if use_crestx is None:
-        crest = mode["crest"](xy_data, shore_x=shore["x"], columns=columns)
+        crest = mode["crest"](xy_data, shore_x=shore_x_aligned, columns=columns)
     else:
         crest = find_closest_x(xy_data, use_crestx)
+    crest_x_aligned = crest["x"].align(xy_data)[0]
 
     if use_toex is None:
-        toe = mode["toe"](xy_data, shore_x=shore["x"], crest_x=crest["x"], columns=columns)
+        toe = mode["toe"](xy_data, shore_x=shore_x_aligned, crest_x=crest_x_aligned, columns=columns)
     else:
         toe = find_closest_x(xy_data, use_toex)
 
     if use_heelx is None:
-        heel = mode["heel"](xy_data, crest_x=crest["x"], columns=columns)
+        heel = mode["heel"](xy_data, crest_x=crest_x_aligned, columns=columns)
     else:
         heel = find_closest_x(xy_data, use_heelx)
 
