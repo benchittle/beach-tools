@@ -179,7 +179,7 @@ def identify_toe_poly(xy_data, shore_x, crest_x, columns):
     # DataFrame.
     toe = xy_data.dropna().groupby(xy_data.index.names).apply(_identify_toe_poly_old).rename("x")
     # Extract the rows corresponding to each identified toe in the original data.
-    toe = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toe.reset_index())]
+    toe = xy_data.set_index("x", append=True).loc[pd.MultiIndex.from_frame(toe.reset_index().dropna())]
 
     # Return the data for the selected columns.
     return toe.reset_index("x")[columns]
