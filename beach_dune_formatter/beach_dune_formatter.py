@@ -7,13 +7,14 @@
 import os, re, time
 import pandas as pd
 import numpy as np
-import extraction_tools_old as extract
+import extraction_tools as extract
 
 
-BEN_IN = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data"
-BEN_OUT = r"C:\Users\Ben2020\Documents\sample_bdf_data\time_data\out_old.xlsx"
+BEN_IN = r"C:\Users\Ben2020\Documents\sample_bdf_data\sample_data"
+BEN_OUT = r"C:\Users\Ben2020\Documents\sample_bdf_data\sample_data\out.xlsx"
 UNI_IN = r"E:\SA\Runs\Poly\tables"
 UNI_OUT =  r"E:\SA\Runs\Poly\tables\b_poly.xlsx"
+
 ####################### PATH SETTINGS #######################
 # Change these variables to modify the input and output paths
 # (type the path directly using the format above if needed,
@@ -22,15 +23,21 @@ current_input = BEN_IN
 current_output = BEN_OUT
 #############################################################
 
+####################### DATA SETTINGS #######################
+# The column names of each data variable in the input data
+# mapped to the desired name in the output data.
+# Ex: {"FIRST_DIST":"x", "FIRST_Z":"y", "FIRST_RR":"rr"}
+data_columns = {"LINE_ID":"profile", "FIRST_DIST":"x", "FIRST_Z":"y"}
+#############################################################
 
-METHOD_RR = extract.MODES["rr"]
-METHOD_RR_FAR = extract.MODES["rrfar"]
-METHOD_IP = extract.MODES["ip"]
-METHOD_POLY = extract.MODES["poly"]
-METHOD_LCP = extract.MODES["lcp"]
+RR = extract.EXTRACTION_METHODS["rr"]
+RR_FAR = extract.EXTRACTION_METHODS["rrfar"]
+IP = extract.EXTRACTION_METHODS["ip"]
+POLY = extract.EXTRACTION_METHODS["poly"]
+LCP = extract.EXTRACTION_METHODS["lcp"]
 ########################### MODE ################################
 # Change this variable to specify the extraction method.
-method = METHOD_LCP
+extraction_method = POLY
 #################################################################
 
 
@@ -43,9 +50,7 @@ def read_mask_csvs(path_to_dir):
     """
     # Default value since all testing data is from one state.
     STATE = np.uint8(29)
-    INPUT_COLUMNS = ["LINE_ID", "FIRST_DIST", "FIRST_Z", "FIRST_RR"]
-    OUTPUT_COLUMNS = ["profile", "x", "y", "rr"]
-    DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32, np.float32]))
+    #DTYPES = dict(zip(INPUT_COLUMNS, [np.uint16, np.float32, np.float32, np.float32]))
 
     if not path_to_dir.endswith("\\"):
         path_to_dir += "\\"
@@ -67,10 +72,9 @@ def read_mask_csvs(path_to_dir):
                 # data types for each (saves some memory for large amounts of
                 # data).
                 csv_data = pd.read_csv(path_to_dir + file_name,
-                                       usecols=INPUT_COLUMNS,
-                                       dtype=DTYPES)[INPUT_COLUMNS]
+                                       usecols=data_columns.keys())
                 # Rename the columns.
-                csv_data.rename(columns=dict(zip(INPUT_COLUMNS, OUTPUT_COLUMNS)),
+                csv_data.rename(columns=data_columns,
                                 inplace=True)
                 # Insert a column for the segment and state values.
                 csv_data.insert(loc=0, column="state", value=STATE)
@@ -181,32 +185,37 @@ def write_data_excel(path_to_file, dataframes, names):
 
 ### HAVE THE USER DECLARE HOW THEIR DATA IS CATEGORIZED / ORGANIZED
 ### (need to know for groupby operations)
-def main(input_path, output_path, feature_id_method):
+def main():
     FEATURE_COLUMNS = ["shore_x",  "shore_y", "toe_x", "toe_y", "crest_x",
                        "crest_y", "heel_x", "heel_y"]
 
-    pd.options.display.max_columns = 12
+    pd.options.display.max_columns = 18
     pd.options.display.width = 100
 
     initial_start_time = time.perf_counter()
 
     print("\nReading .csv's...")
     start_time = time.perf_counter()
-    xy_data = read_mask_csvs(input_path)
+    xy_data = read_mask_csvs(current_input).set_index(["state", "segment", "profile"])
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
 
 
     print("\nIdentifying features...")
     start_time = time.perf_counter()
 
+
     # Identify the shoreline, dune toe, dune crest, and dune heel for each
     # profile in the data. This data will be returned as a Pandas Series
     # containing tuples of the 4 pairs of coordinates for each profile.
-    profiles = xy_data.groupby(["state", "segment", "profile"]).apply(extract.identify_features(method))
+    profiles = extract.identify_features(
+        extract_methods=extraction_method,
+        xy_data=xy_data,
+        columns=xy_data.columns)
+
 
     # Expand the Series of tuples into a DataFrame where each column contains an
     # x or y componenent of a feature.
-    profiles = pd.DataFrame(profiles.to_list(), columns=FEATURE_COLUMNS, index=profiles.index)
+    #profiles = pd.DataFrame(profiles.to_list(), columns=FEATURE_COLUMNS, index=profiles.index)
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
 
 
@@ -285,12 +294,12 @@ def main(input_path, output_path, feature_id_method):
 
     print("\nWriting to file...")
     start_time = time.perf_counter()
-    write_data_excel(path_to_file=output_path,
+    write_data_excel(path_to_file=current_output,
                      dataframes=(profiles, beach_data, corr1, filtered_beach_data,
                                  corr2, averaged_beach_data),
                      names=("profiles", "unfiltered", "corr_1", "filtered",
                             "corr_2", "averages"))
-    print("\tDone writing to {}".format(output_path))
+    print("\tDone writing to {}".format(current_output))
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
 
     print("\nTotal time: {:.2f} seconds".format(time.perf_counter() - initial_start_time))
@@ -300,5 +309,5 @@ def main(input_path, output_path, feature_id_method):
 
 if __name__ == "__main__":
     #xy_data, profiles, beach_data, filtered_beach_data, avg = main(current_input, current_output)
-    main(current_input, current_output, method)
+    main()
 
