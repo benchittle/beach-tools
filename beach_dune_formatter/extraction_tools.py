@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------
 # Name:        extraction_tools.py
-# Version:     Python 3.9.1, pandas 1.2.0, numpy 1.19.3
+# Version:     Python 3.9.1, pandas 1.2.4, numpy 1.20.3
 # Authors:     Ben Chittle, Alex Smith, Libby George
 #-------------------------------------------------------------------------------
 import pandas as pd
