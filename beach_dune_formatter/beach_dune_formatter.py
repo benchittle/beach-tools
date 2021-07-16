@@ -26,7 +26,7 @@ current_output = BEN_OUT
 ####################### DATA SETTINGS #######################
 # The column names of each data variable in the input data
 # mapped to the desired name in the output data.
-# Ex: {"FIRST_DIST":"x", "FIRST_Z":"y", "FIRST_RR":"rr"}
+# Ex: {"LINE_ID":"profile", "FIRST_DIST":"x", "FIRST_Z":"y", "FIRST_RR":"rr"}
 data_columns = {"LINE_ID":"profile", "FIRST_DIST":"x", "FIRST_Z":"y"}
 #############################################################
 
@@ -41,7 +41,7 @@ extraction_method = POLY
 #################################################################
 
 
-def read_mask_csvs(path_to_dir):
+def read_mask_csvs(path_to_dir, columns):
     """
     Reads all .csv files in the given directory and concatenates them into a
     single DataFrame. Each .csv file name should end with a number specifying
@@ -72,9 +72,9 @@ def read_mask_csvs(path_to_dir):
                 # data types for each (saves some memory for large amounts of
                 # data).
                 csv_data = pd.read_csv(path_to_dir + file_name,
-                                       usecols=data_columns.keys())
+                                       usecols=columns.keys())
                 # Rename the columns.
-                csv_data.rename(columns=data_columns,
+                csv_data.rename(columns=columns,
                                 inplace=True)
                 # Insert a column for the segment and state values.
                 csv_data.insert(loc=0, column="state", value=STATE)
@@ -196,7 +196,7 @@ def main():
 
     print("\nReading .csv's...")
     start_time = time.perf_counter()
-    xy_data = read_mask_csvs(current_input).set_index(["state", "segment", "profile"])
+    xy_data = read_mask_csvs(current_input, data_columns).set_index(["state", "segment", "profile"])
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
 
 
@@ -243,16 +243,16 @@ def main():
     beach_data["dune_slope"] = beach_data["dune_height"] / beach_data["dune_length"]
 
     beach_data["beach_vol"] = measure_feature_volumes(
-                                  xy_data,
-                                  start_values=profiles["shore_x"],
-                                  end_values=profiles["toe_x"],
-                                  base_elevations=profiles["shore_y"])
+        xy_data,
+        start_values=profiles["shore_x"],
+        end_values=profiles["toe_x"],
+        base_elevations=profiles["shore_y"])
     ### ARE ELEVATIONS RELATIVE TO TOE Y OR SHORE Y?
     beach_data["dune_vol"] = measure_feature_volumes(
-                                 xy_data,
-                                 start_values=profiles["toe_x"],
-                                 end_values=profiles["crest_x"],
-                                 base_elevations=profiles["toe_y"])
+        xy_data,
+        start_values=profiles["toe_x"],
+        end_values=profiles["crest_x"],
+        base_elevations=profiles["toe_y"])
     ### SHOULD THIS BE db_ratio?
     beach_data["bd_ratio"] = beach_data["dune_vol"] / beach_data["beach_vol"]
     print("\tTook {:.2f} seconds".format(time.perf_counter() - start_time))
